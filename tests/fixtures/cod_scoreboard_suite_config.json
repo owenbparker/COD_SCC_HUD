@@ -1,0 +1,414 @@
+{
+  "gradient_overlay": {
+    "ref_w": 1920,
+    "ref_h": 1080,
+    "crop_enabled": true,
+    "crop_x": 723,
+    "crop_y": 20,
+    "crop_w": 474,
+    "crop_h": 179,
+    "color_left": "#AE2626",
+    "color_right": "#841319",
+    "mid_enabled": true,
+    "color_mid": "#14151B",
+    "mid_position": 0.5,
+    "opacity": 0.2,
+    "angle_deg": 0.0,
+    "squish": 1.0,
+    "feather": 15.0,
+    "base_fill_enabled": true,
+    "gradient_steps": 1,
+    "switcher_boost_enabled": true,
+    "switcher_opacity_boost_left": 15.0,
+    "switcher_opacity_boost_right": 15.0,
+    "switcher_lum_boost_left": 10.0,
+    "switcher_lum_boost_right": 10.0,
+    "switcher_smooth_enabled": true,
+    "switcher_smooth_duration": 0.2,
+    "ndi_enabled": true,
+    "swatches": [
+      {
+        "hex": "#14151B",
+        "tolerance": 1,
+        "rect": [
+          0,
+          0,
+          1920,
+          1080
+        ],
+        "enabled": true
+      },
+      {
+        "hex": "#23252D",
+        "tolerance": 1,
+        "rect": [
+          0,
+          0,
+          1920,
+          1080
+        ],
+        "enabled": true
+      },
+      {
+        "hex": "#333540",
+        "tolerance": 1,
+        "rect": [
+          0,
+          0,
+          1920,
+          1080
+        ],
+        "enabled": true
+      }
+    ],
+    "overrides": [
+      {
+        "x": 729,
+        "y": 50,
+        "w": 80,
+        "h": 100,
+        "enabled": true
+      },
+      {
+        "x": 1111,
+        "y": 50,
+        "w": 80,
+        "h": 100,
+        "enabled": true
+      },
+      {
+        "x": 723,
+        "y": 15,
+        "w": 474,
+        "h": 31,
+        "enabled": true
+      }
+    ],
+    "palette": [
+      "#23252D",
+      "#14151B",
+      "#BF1920",
+      "#04B034",
+      "#8C0C0B",
+      "#8A8989",
+      "#FF0000",
+      "#FFFFFF"
+    ]
+  },
+  "switcher": {
+    "idle_color": "#14151B",
+    "confirm_polls": 1,
+    "off_hold_polls": 1,
+    "combine_1_4": false,
+    "combine_5_8": false,
+    "require_hud_match": true,
+    "pixels": [
+      {
+        "name": "Pixel 1",
+        "x": 444,
+        "y": 115,
+        "enabled": true,
+        "last_color": "#14151B",
+        "input": "2",
+        "function": "LayerOn",
+        "layer": "3"
+      },
+      {
+        "name": "Pixel 2",
+        "x": 444,
+        "y": 145,
+        "enabled": true,
+        "last_color": "#14151B",
+        "input": "2",
+        "function": "LayerOn",
+        "layer": "4"
+      },
+      {
+        "name": "Pixel 3",
+        "x": 444,
+        "y": 179,
+        "enabled": true,
+        "last_color": "#14151B",
+        "input": "2",
+        "function": "LayerOn",
+        "layer": "5"
+      },
+      {
+        "name": "Pixel 4",
+        "x": 444,
+        "y": 209,
+        "enabled": true,
+        "last_color": "#14151B",
+        "input": "2",
+        "function": "LayerOn",
+        "layer": "6"
+      },
+      {
+        "name": "Pixel 5",
+        "x": 1664,
+        "y": 115,
+        "enabled": true,
+        "last_color": "#FFFFFF",
+        "input": "2",
+        "function": "LayerOn",
+        "layer": "7"
+      },
+      {
+        "name": "Pixel 6",
+        "x": 1664,
+        "y": 145,
+        "enabled": true,
+        "last_color": "#14151B",
+        "input": "2",
+        "function": "LayerOn",
+        "layer": "8"
+      },
+      {
+        "name": "Pixel 7",
+        "x": 1664,
+        "y": 179,
+        "enabled": true,
+        "last_color": "#14151B",
+        "input": "2",
+        "function": "LayerOn",
+        "layer": "9"
+      },
+      {
+        "name": "Pixel 8",
+        "x": 1664,
+        "y": 209,
+        "enabled": true,
+        "last_color": "#14151B",
+        "input": "2",
+        "function": "LayerOn",
+        "layer": "10"
+      }
+    ],
+    "listen_toggles": [
+      {
+        "name": "Listen-In Toggle",
+        "enabled": false,
+        "input": "",
+        "function": "LayerOn",
+        "layer": ""
+      },
+      {
+        "name": "Listen-In Toggle",
+        "enabled": false,
+        "input": "",
+        "function": "LayerOn",
+        "layer": ""
+      }
+    ]
+  },
+  "detector": {
+    "software_mode": "vmix",
+    "capture_mode": "window",
+    "window_title": "C\u200ba\u200bl\u200bl\u200b \u200bo\u200bf\u200b \u200bD\u200bu\u200bt\u200by\u200b\u00ae\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b",
+    "monitor_index": 1,
+    "pixel_x": 960,
+    "pixel_y": 57,
+    "target_color": "#23252D",
+    "tolerance": 1,
+    "pixel2_enabled": true,
+    "pixel2_x": 1500,
+    "pixel2_y": 80,
+    "pixel2_target_color": "#333540",
+    "pixel2_tolerance": 1,
+    "gradient_only_on_pixel1": true,
+    "vmix_host": "127.0.0.1",
+    "vmix_port": 8088,
+    "match_function": "LayerOn",
+    "match_input": "1",
+    "match_layer": "10",
+    "mismatch_function": "LayerOff",
+    "mismatch_input": "1",
+    "mismatch_layer": "10",
+    "obs_host": "127.0.0.1",
+    "obs_port": 4455,
+    "obs_password": "",
+    "obs_scene": "In-Game",
+    "obs_source": "Scoreboard",
+    "other_host": "http://localhost:8080",
+    "other_match_command": "",
+    "other_mismatch_command": "",
+    "send_every_poll": false
+  },
+  "global": {
+    "software": "vmix",
+    "capture_mode": "window",
+    "monitor_index": 1,
+    "window_title": "C\u200ba\u200bl\u200bl\u200b \u200bo\u200bf\u200b \u200bD\u200bu\u200bt\u200by\u200b\u00ae\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b",
+    "vmix_host": "127.0.0.1",
+    "vmix_port": 8088,
+    "obs_host": "127.0.0.1",
+    "obs_port": 4455,
+    "obs_password": "",
+    "other_host": "http://localhost:8080",
+    "poll_interval_ms": 20,
+    "require_hud_match": true,
+    "ndi_name": "CoD Scoreboard Suite",
+    "ndi_separate": false
+  },
+  "scoreboard_highlights": {
+    "pixels": [
+      {
+        "enabled": true,
+        "name": "Pixel 1",
+        "x": 55,
+        "y": 110,
+        "tolerance": 1
+      },
+      {
+        "enabled": true,
+        "name": "Pixel 2",
+        "x": 55,
+        "y": 142,
+        "tolerance": 1
+      },
+      {
+        "enabled": true,
+        "name": "Pixel 3",
+        "x": 55,
+        "y": 174,
+        "tolerance": 1
+      },
+      {
+        "enabled": true,
+        "name": "Pixel 4",
+        "x": 55,
+        "y": 206,
+        "tolerance": 1
+      },
+      {
+        "enabled": true,
+        "name": "Pixel 5",
+        "x": 1279,
+        "y": 110,
+        "tolerance": 1
+      },
+      {
+        "enabled": true,
+        "name": "Pixel 6",
+        "x": 1279,
+        "y": 142,
+        "tolerance": 1
+      },
+      {
+        "enabled": true,
+        "name": "Pixel 7",
+        "x": 1279,
+        "y": 174,
+        "tolerance": 1
+      },
+      {
+        "enabled": true,
+        "name": "Pixel 8",
+        "x": 1279,
+        "y": 206,
+        "tolerance": 1
+      }
+    ],
+    "base_hex": "#13141B",
+    "dim_hexes": "#FFFFFF, #000000",
+    "gradients": [
+      {
+        "enabled": true,
+        "x": 43,
+        "y": 97,
+        "w": 610,
+        "h": 32
+      },
+      {
+        "enabled": true,
+        "x": 43,
+        "y": 129,
+        "w": 610,
+        "h": 32
+      },
+      {
+        "enabled": true,
+        "x": 43,
+        "y": 161,
+        "w": 610,
+        "h": 32
+      },
+      {
+        "enabled": true,
+        "x": 43,
+        "y": 193,
+        "w": 610,
+        "h": 32
+      },
+      {
+        "enabled": true,
+        "x": 1267,
+        "y": 97,
+        "w": 610,
+        "h": 32
+      },
+      {
+        "enabled": true,
+        "x": 1267,
+        "y": 129,
+        "w": 610,
+        "h": 32
+      },
+      {
+        "enabled": true,
+        "x": 1267,
+        "y": 161,
+        "w": 610,
+        "h": 32
+      },
+      {
+        "enabled": true,
+        "x": 1267,
+        "y": 193,
+        "w": 610,
+        "h": 32
+      }
+    ],
+    "edge_brighten_pct": 35.0,
+    "grad_falloff": 2.5,
+    "grad_core_pct": 0.0,
+    "grad_radius_pct": 100.0,
+    "grad_oval_pct": 0.0,
+    "grad_side_depth_pct": 100.0,
+    "light_top": true,
+    "light_bottom": true,
+    "light_left": true,
+    "light_right": true,
+    "grad_corner_px": 0.0,
+    "use_mask": true,
+    "grad_edge_hue": 0.0,
+    "grad_edge_sat": 100.0,
+    "grad_center_opacity_pct": 15.0,
+    "grad_edge_opacity_pct": 100.0,
+    "rules_version": 7,
+    "swatches": [
+      {
+        "hex": "#14151B",
+        "tolerance": 0,
+        "enabled": true
+      }
+    ],
+    "feather": 0,
+    "color_left": "#AE2626",
+    "color_right": "#771116",
+    "opacity": 0.25,
+    "highlight_opacity_pct": 10.0,
+    "highlight_lum_pct": 10.0,
+    "dim_opacity_pct": 10.0,
+    "dim_lum_pct": 25.0,
+    "smooth_enabled": true,
+    "smooth_duration": 0.15,
+    "update_fps": 60,
+    "ndi_enabled": true
+  },
+  "ovl_hub": {
+    "ndi_pos_x": 480,
+    "ndi_pos_y": 540,
+    "pos_bar_y": 0
+  }
+}

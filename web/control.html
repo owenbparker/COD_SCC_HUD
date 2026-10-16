@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="assets/app_icon.png">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoD HUD Control</title>
+<style>
+  @font-face { font-family: "Inter"; src: url("fonts/Inter.ttf") format("truetype"); font-weight: 100 900; }
+  :root { --bg: #0e1012; --panel: #171a1d; --line: #2a2f34; --text: #e8eaed; --muted: #8b939b; --accent: #31c392; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 14px; height: 54px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { margin: 0; font-size: 16px; font-weight: 700; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .dot { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; background: #c0392b; }
+  .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot.part { background: #ffcf66; }
+  .spacer { flex: 1; }
+  .version { font-size: 12px; color: var(--muted); }
+  .update { background: var(--accent); color: #06231a; border: 0; font-weight: 700; padding: 6px 12px; }
+  .update.check { background: #252a2f; color: var(--text); border: 1px solid var(--line); font-weight: 600; }
+  .update[disabled] { background: #2c3a35; color: var(--text); cursor: default; }
+  .update.error { background: #6b2a2a; color: #fff; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex: 0 0 auto; }
+  .seg button { border: 0; border-radius: 0; background: transparent; padding: 6px 12px; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: #06231a; font-weight: 600; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 460px; height: calc(100% - 54px); }
+  .layout > main, .layout > aside { overflow-y: auto; }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 16px; align-content: start; }
+  aside { border-left: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  @media (max-width: 900px) { .layout { display: block; height: auto; } aside { border-left: 0; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { margin: 0 0 12px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+  h2 .reset { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12px; padding: 3px 8px; }
+  h3 { margin: 14px 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 12px; }
+  label span.val { color: var(--text); float: right; font-variant-numeric: tabular-nums; }
+  input, select { width: 100%; padding: 7px 9px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+  input[type=checkbox] { width: auto; }
+  input[type=color] { flex: 0 0 52px; width: 52px; height: 34px; padding: 3px; cursor: pointer; }
+  input[type=range] { padding: 0; border: 0; background: none; accent-color: var(--accent); }
+  input[type=number] { padding: 5px 6px; font-variant-numeric: tabular-nums; }
+  button { padding: 7px 12px; background: #252a2f; color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: #06231a; border-color: var(--accent); font-weight: 600; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; min-width: 0; }
+  .toggle { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px; margin: 6px 0 10px; cursor: pointer; }
+  .toggle input { width: 16px; height: 16px; accent-color: var(--accent); flex: 0 0 auto; }
+  .colours { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px 12px; }
+  .colours label { margin: 0 0 4px; }
+  .colours .row input[type=text] { font: 12px ui-monospace, Consolas, monospace; text-transform: uppercase; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+  code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 12px; word-break: break-all; }
+  .out { margin-bottom: 10px; }
+  .out > span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .out .row { align-items: stretch; }
+  .out code { display: flex; align-items: center; padding: 6px 8px; }
+  .out button { flex: 0 0 auto; }
+  .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .chip { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip.bright b { color: #ffcf66; }
+  .chip.dim b { color: #8b939b; }
+  .chip.spec { border-color: var(--accent); }
+  .readout { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+  .readout span:nth-child(odd) { color: var(--muted); }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); vertical-align: -2px; margin-right: 4px; }
+  .preview { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #111; border-radius: 6px; overflow: hidden; cursor: crosshair; }
+  .preview img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .preview iframe { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; pointer-events: none; }
+  .preview .mark { position: absolute; width: 9px; height: 9px; margin: -5px 0 0 -5px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #000; pointer-events: none; display: none; }
+  .preview .none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  .preview .none[hidden] { display: none; }
+  .picked { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; min-height: 30px; }
+  .picked code { font-size: 13px; }
+  table.cal { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.cal th { color: var(--muted); font-weight: 600; text-align: left; padding: 4px 4px; white-space: nowrap; }
+  table.cal td { padding: 2px 4px; }
+  table.cal td:first-child { color: var(--muted); white-space: nowrap; }
+  table.cal input { width: 100%; min-width: 48px; }
+  table.cal input[type=checkbox], .list input[type=checkbox] { width: 16px; height: 16px; min-width: 0; accent-color: var(--accent); }
+  .list .item { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .list .item input[type=text] { flex: 0 0 96px; font: 12px ui-monospace, Consolas, monospace; text-transform: uppercase; }
+  .list .item input[type=number] { flex: 0 0 72px; }
+  .list .item small { color: var(--muted); }
+  .list .item button { flex: 0 0 auto; padding: 3px 9px; }
+  details > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .log { height: 200px; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
+         font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+  .log .t { color: var(--muted); margin-right: 6px; }
+  .log .warn { color: #ffcf66; }
+  .log .error { color: #ff7b7b; }
+  .warn { color: #ffcf66; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SCC CoD HUD</h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="status-text">Starting…</span></div>
+  <div class="spacer"></div>
+  <div class="seg" id="mode"><button data-demo="0">Live game</button><button data-demo="1">Demo</button></div>
+  <span class="version" id="version"></span>
+  <button id="update" class="update" hidden></button>
+</header>
+
+<div class="layout">
+<main>
+  <section class="wide">
+    <h2>Right now</h2>
+    <div class="readout">
+      <span>Game</span><span id="r-source">–</span>
+      <span>CoD caster HUD</span><span id="r-hud">–</span>
+      <span>Auto hide pixels</span><span id="r-pixels">–</span>
+    </div>
+    <h3>Scoreboard rows (glow)</h3>
+    <div class="chips" id="chips"></div>
+    <p class="note">Each row's glow is normal, <b class="warn">bright</b> (an objective icon), or dim (a skull). The spectated player's row is outlined.</p>
+  </section>
+
+  <section>
+    <h2>Team colours <button class="reset" id="swap">Swap sides</button></h2>
+    <div class="colours">
+      <div><label>Left glow</label><div class="row" data-colour="highlights.color_left"></div></div>
+      <div><label>Right glow</label><div class="row" data-colour="highlights.color_right"></div></div>
+      <div><label>Score box left</label><div class="row" data-colour="scorebox.color_left"></div></div>
+      <div><label>Score box right</label><div class="row" data-colour="scorebox.color_right"></div></div>
+    </div>
+    <p class="note">The left team is the scoreboard on the left of the CoD caster HUD.</p>
+  </section>
+
+  <section>
+    <h2>Name highlights <button class="reset" data-reset="highlights">Reset</button></h2>
+    <label class="toggle"><input type="checkbox" data-k="highlights.enabled"> Glow around the player names</label>
+    <label>Strength <span class="val"></span></label><input type="range" data-k="highlights.opacity" min="0" max="1" step="0.01">
+    <div class="two">
+      <div><label>Middle opacity % <span class="val"></span></label><input type="range" data-k="highlights.center_opacity" min="0" max="100" step="1"></div>
+      <div><label>Edge opacity % <span class="val"></span></label><input type="range" data-k="highlights.edge_opacity" min="0" max="100" step="1"></div>
+      <div><label>Edge lightness <span class="val"></span></label><input type="range" data-k="highlights.edge_brighten" min="0" max="100" step="1"></div>
+      <div><label>Edge saturation <span class="val"></span></label><input type="range" data-k="highlights.edge_saturation" min="-100" max="100" step="1"></div>
+      <div><label>Glow reach % <span class="val"></span></label><input type="range" data-k="highlights.reach" min="5" max="100" step="1"></div>
+      <div><label>Steepness <span class="val"></span></label><input type="range" data-k="highlights.falloff" min="0.1" max="8" step="0.1"></div>
+    </div>
+    <h3>On the objective (brighter)</h3>
+    <div class="two">
+      <div><label>Opacity + % <span class="val"></span></label><input type="range" data-k="highlights.bright_opacity" min="0" max="300" step="1"></div>
+      <div><label>Lightness + <span class="val"></span></label><input type="range" data-k="highlights.bright_lightness" min="0" max="60" step="1"></div>
+    </div>
+    <h3>Dead (dimmer)</h3>
+    <div class="two">
+      <div><label>Opacity − % <span class="val"></span></label><input type="range" data-k="highlights.dim_opacity" min="0" max="100" step="1"></div>
+      <div><label>Lightness − <span class="val"></span></label><input type="range" data-k="highlights.dim_lightness" min="0" max="60" step="1"></div>
+    </div>
+    <label>Fade (seconds) <span class="val"></span></label><input type="range" data-k="highlights.fade" min="0" max="1" step="0.01">
+    <details><summary>More glow shape</summary>
+      <div class="two">
+        <div><label>Edge hue turn <span class="val"></span></label><input type="range" data-k="highlights.edge_hue" min="-180" max="180" step="1"></div>
+        <div><label>Dark middle % <span class="val"></span></label><input type="range" data-k="highlights.core" min="0" max="95" step="1"></div>
+        <div><label>Oval blend % <span class="val"></span></label><input type="range" data-k="highlights.oval" min="0" max="100" step="1"></div>
+        <div><label>Side depth % <span class="val"></span></label><input type="range" data-k="highlights.side_depth" min="5" max="300" step="1"></div>
+        <div><label>Corner radius <span class="val"></span></label><input type="range" data-k="highlights.corner" min="0" max="16" step="1"></div>
+      </div>
+      <label>Lit edges</label>
+      <div class="row">
+        <label class="toggle"><input type="checkbox" data-k="highlights.edges.top"> Top</label>
+        <label class="toggle"><input type="checkbox" data-k="highlights.edges.bottom"> Bottom</label>
+        <label class="toggle"><input type="checkbox" data-k="highlights.edges.left"> Left</label>
+        <label class="toggle"><input type="checkbox" data-k="highlights.edges.right"> Right</label>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Score box <button class="reset" data-reset="scorebox">Reset</button></h2>
+    <label class="toggle"><input type="checkbox" data-k="scorebox.enabled"> Recolour the score box with the teams' colours</label>
+    <label>Strength <span class="val"></span></label><input type="range" data-k="scorebox.opacity" min="0" max="1" step="0.01">
+    <label class="toggle"><input type="checkbox" data-k="scorebox.mid_enabled"> A middle colour</label>
+    <div class="two">
+      <div><label>Middle colour</label><div class="row" data-colour="scorebox.color_mid"></div></div>
+      <div><label>Middle at <span class="val"></span></label><input type="range" data-k="scorebox.mid_position" min="0.05" max="0.95" step="0.01"></div>
+    </div>
+    <label class="toggle"><input type="checkbox" data-k="scorebox.base_fill"> Fill under the gradient with</label>
+    <div class="row" data-colour="scorebox.base_color" style="max-width: 200px"></div>
+    <div class="two">
+      <div><label>Edge softness <span class="val"></span></label><input type="range" data-k="scorebox.feather" min="0" max="60" step="1"></div>
+      <div><label>Angle <span class="val"></span></label><input type="range" data-k="scorebox.angle" min="-90" max="90" step="1"></div>
+    </div>
+    <h3>Spectated player's side lights up</h3>
+    <label class="toggle"><input type="checkbox" data-k="scorebox.boost.enabled"> Light up the side of the team being spectated</label>
+    <div class="two">
+      <div><label>Opacity + % <span class="val"></span></label><input type="range" data-k="scorebox.boost.opacity_left" min="0" max="200" step="1" data-also="scorebox.boost.opacity_right"></div>
+      <div><label>Lightness + <span class="val"></span></label><input type="range" data-k="scorebox.boost.lightness_left" min="0" max="60" step="1" data-also="scorebox.boost.lightness_right"></div>
+    </div>
+    <label>Fade (seconds) <span class="val"></span></label><input type="range" data-k="scorebox.boost.fade" min="0" max="1" step="0.01">
+  </section>
+
+  <section>
+    <h2>Auto hide <button class="reset" data-reset="detector">Reset</button></h2>
+    <label class="toggle"><input type="checkbox" data-k="detector.enabled"> Only show while the CoD caster HUD is on screen</label>
+    <p class="note">Told by two pixels of the CoD caster HUD: one in the score box and one in the right team's scoreboard. Click the preview to read any pixel.</p>
+    <table class="cal">
+      <tr><th></th><th>X</th><th>Y</th><th>Colour</th><th>Tol.</th></tr>
+      <tr><td>Score box</td><td><input type="number" data-k="detector.pixel1.x"></td><td><input type="number" data-k="detector.pixel1.y"></td>
+          <td><input type="text" data-k="detector.pixel1.color"></td><td><input type="number" data-k="detector.pixel1.tolerance"></td></tr>
+      <tr><td>Scoreboard</td><td><input type="number" data-k="detector.pixel2.x"></td><td><input type="number" data-k="detector.pixel2.y"></td>
+          <td><input type="text" data-k="detector.pixel2.color"></td><td><input type="number" data-k="detector.pixel2.tolerance"></td></tr>
+    </table>
+    <label class="toggle"><input type="checkbox" data-k="detector.pixel2.enabled"> Check the scoreboard pixel too</label>
+    <label class="toggle"><input type="checkbox" data-k="detector.score_box_only"> Score box up without the scoreboards: keep the score box overlay</label>
+  </section>
+
+  <section>
+    <h2>Game picture</h2>
+    <div class="seg" id="capture-mode"><button data-mode="window">Call of Duty window</button><button data-mode="screen">Whole screen</button></div>
+    <label>Window title contains</label><input type="text" data-k="capture.window_title">
+    <label>Screen (whole screen mode)</label><select data-k="capture.screen" data-num="1"><option value="0">Main screen</option><option value="1">Screen 2</option><option value="2">Screen 3</option><option value="3">Screen 4</option></select>
+    <label>Read every (ms) <span class="val"></span></label><input type="range" data-k="capture.poll_ms" min="10" max="100" step="1">
+    <p class="note">The window is read even while other windows cover it. Use whole screen if the window can't be read (the game must then be visible on that screen).</p>
+  </section>
+
+  <section class="wide">
+    <h2>Calibration <button class="reset" id="reset-cal">Reset all</button></h2>
+    <p class="note" style="margin-top:0">Positions are in 1920×1080 pixels, whatever resolution the game runs at. The defaults match the CoD caster HUD; you only need these if it moves.</p>
+    <div class="row" style="margin: 10px 0">
+      <label class="toggle" style="flex:0 0 auto; margin:0"><button id="import-btn">Import CoD Scoreboard Suite settings…</button></label>
+      <input type="file" id="import-file" accept=".json,application/json" hidden>
+      <span class="note" style="margin:0">cod_scoreboard_suite_config.json: brings over its pixels, boxes, colours and look.</span>
+    </div>
+    <details><summary>Scoreboard rows</summary>
+      <table class="cal" id="rows-table"></table>
+      <div class="two">
+        <div><label>Row colour (icon pixel: normal)</label><input type="text" data-k="highlights.base_color"></div>
+        <div><label>Skull colours (icon pixel: dim)</label><input type="text" data-k="highlights.dim_colors"></div>
+        <div><label>Name cell colour (not spectated)</label><input type="text" data-k="spectated.idle_color"></div>
+        <div><label>Glow edge softness <span class="val"></span></label><input type="range" data-k="highlights.feather" min="0" max="60" step="1"></div>
+      </div>
+      <label class="toggle"><input type="checkbox" data-k="highlights.use_mask"> Glow only on the rows' background colours:</label>
+      <div class="list" data-list="highlights.mask_colors"></div>
+    </details>
+    <details><summary>Score box</summary>
+      <table class="cal">
+        <tr><th></th><th>X</th><th>Y</th><th>Width</th><th>Height</th></tr>
+        <tr><td>Area</td><td><input type="number" data-k="scorebox.x"></td><td><input type="number" data-k="scorebox.y"></td>
+            <td><input type="number" data-k="scorebox.w"></td><td><input type="number" data-k="scorebox.h"></td></tr>
+      </table>
+      <h3>Background colours recoloured</h3>
+      <div class="list" data-list="scorebox.mask_colors"></div>
+      <h3>Always covered (whatever the colour)</h3>
+      <div class="list" data-list="scorebox.overrides"></div>
+    </details>
+  </section>
+</main>
+
+<aside>
+  <section>
+    <h2>Preview</h2>
+    <div class="preview" id="preview">
+      <img id="frame" alt="">
+      <iframe id="preview-frame" src="/overlay" title="Overlay preview" tabindex="-1"></iframe>
+      <div class="mark" id="mark"></div>
+      <div class="none" id="no-frame">No game picture yet.</div>
+    </div>
+    <div class="picked" id="picked"><span class="note" style="margin:0">Click the preview to read a pixel's position and colour.</span></div>
+  </section>
+  <section>
+    <h2>Browser source</h2>
+    <div class="out"><span>Add as a browser source (1920×1080) in vMix or OBS:</span>
+      <div class="row"><code id="url-local"></code><button data-copy="url-local">Copy</button></div></div>
+    <div class="out" id="lan-box" hidden><span>From another PC on the network:</span>
+      <div class="row"><code id="url-lan"></code><button data-copy="url-lan">Copy</button></div></div>
+    <label class="toggle"><input type="checkbox" id="network"> Let other PCs on the network load the overlay</label>
+    <p class="note">Lay it over the game feed. It draws on the CoD caster HUD only and hides when the HUD goes away.</p>
+  </section>
+  <section>
+    <h2>Log</h2>
+    <div class="log" id="log"></div>
+  </section>
+</aside>
+</div>
+
+<script src="update.js"></script>
+<script>
+(function () {
+  "use strict";
+  var cfg = null, defaults = null, info = null, logAfter = 0;
+  var $ = function (s, el) { return (el || document).querySelector(s); };
+  var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
+  var renderUpdate = updateButton($("#update"), $("#version"));
+
+  function get(obj, path) { return path.split(".").reduce(function (o, k) { return o == null ? o : o[k]; }, obj); }
+  function setLocal(path, value) {
+    var keys = path.split("."), o = cfg;
+    for (var i = 0; i < keys.length - 1; i++) o = o[keys[i]];
+    o[keys[keys.length - 1]] = value;
+  }
+  function post(url, body) {
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.error) { alert(d.error); throw new Error(d.error); } return d; });
+  }
+  var timers = {};
+  function save(path, value, now) {
+    setLocal(path, value);
+    clearTimeout(timers[path]);
+    var go = function () { post("/api/config", { path: path, value: value }).catch(function () {}); };
+    if (now) go(); else timers[path] = setTimeout(go, 120);
+  }
+  function validHex(text) { return /^#?[0-9a-f]{6}$/i.test(String(text).trim()); }
+  function normHex(text) { text = String(text).trim().toUpperCase(); return text[0] === "#" ? text : "#" + text; }
+
+  // --- settings fields --------------------------------------------------------
+  function showVal(el) {
+    var lab = el.previousElementSibling, span = lab && lab.querySelector(".val");
+    if (span) span.textContent = el.value;
+  }
+  function bindFields(root) {
+    $$("[data-k]", root).forEach(function (el) {
+      if (el.dataset.bound) return;
+      el.dataset.bound = "1";
+      var path = el.dataset.k;
+      el.addEventListener(el.type === "range" || el.type === "text" || el.type === "number" ? "input" : "change", function () {
+        var value;
+        if (el.type === "checkbox") value = el.checked;
+        else if (el.type === "range" || el.type === "number" || el.dataset.num) value = Number(el.value);
+        else value = el.value;
+        if (el.type === "text" && /color|colour/.test(path) && !/colors$/.test(path)) {
+          if (!validHex(value)) return;
+          value = normHex(value);
+        }
+        if (el.type === "number" && !isFinite(value)) return;
+        save(path, value);
+        if (el.dataset.also) save(el.dataset.also, value);
+        showVal(el);
+      });
+    });
+    $$("[data-colour]", root).forEach(function (box) {
+      if (box.dataset.bound) return;
+      box.dataset.bound = "1";
+      var path = box.dataset.colour;
+      box.innerHTML = '<input type="color"><input type="text" maxlength="7">';
+      var pick = box.children[0], text = box.children[1];
+      pick.addEventListener("input", function () { text.value = pick.value.toUpperCase(); save(path, text.value); });
+      text.addEventListener("input", function () {
+        if (!validHex(text.value)) return;
+        pick.value = normHex(text.value).toLowerCase();
+        save(path, normHex(text.value));
+      });
+    });
+  }
+  function fillFields(root) {
+    $$("[data-k]", root).forEach(function (el) {
+      if (el === document.activeElement) return;
+      var value = get(cfg, el.dataset.k);
+      if (el.type === "checkbox") el.checked = !!value;
+      else el.value = value == null ? "" : value;
+      showVal(el);
+    });
+    $$("[data-colour]", root).forEach(function (box) {
+      var value = get(cfg, box.dataset.colour) || "#000000";
+      if (box.contains(document.activeElement)) return;
+      box.children[0].value = value.toLowerCase();
+      box.children[1].value = value.toUpperCase();
+    });
+    $$("#capture-mode button").forEach(function (b) { b.classList.toggle("on", cfg.capture.mode === b.dataset.mode); });
+  }
+
+  // The calibration table: each row's icon pixel, glow box and name-cell pixel.
+  function buildRows() {
+    var html = "<tr><th></th><th>Icon X</th><th>Icon Y</th><th>Tol.</th><th>Glow X</th><th>Glow Y</th><th>W</th><th>H</th>" +
+               "<th>Name X</th><th>Name Y</th><th>On</th></tr>";
+    for (var i = 0; i < 8; i++) {
+      var n = function (k) { return '<td><input type="number" data-k="' + k + '"></td>'; };
+      html += "<tr><td>" + (i < 4 ? "Left " + (i + 1) : "Right " + (i - 3)) + "</td>" +
+        n("highlights.pixels." + i + ".x") + n("highlights.pixels." + i + ".y") + n("highlights.pixels." + i + ".tolerance") +
+        n("highlights.boxes." + i + ".x") + n("highlights.boxes." + i + ".y") + n("highlights.boxes." + i + ".w") + n("highlights.boxes." + i + ".h") +
+        n("spectated.pixels." + i + ".x") + n("spectated.pixels." + i + ".y") +
+        '<td><input type="checkbox" data-k="highlights.boxes.' + i + '.enabled"></td></tr>';
+    }
+    $("#rows-table").innerHTML = html;
+  }
+
+  // Lists: colours ({hex, tolerance}) or areas ({x, y, w, h}).
+  function buildLists() {
+    $$("[data-list]").forEach(function (box) {
+      var path = box.dataset.list, items = get(cfg, path) || [], areas = /overrides/.test(path);
+      box.innerHTML = "";
+      items.forEach(function (it, i) {
+        var row = document.createElement("div");
+        row.className = "item";
+        var base = path + "." + i;
+        row.innerHTML = '<input type="checkbox" data-k="' + base + '.enabled" title="On">' + (areas
+          ? '<small>X</small><input type="number" data-k="' + base + '.x"><small>Y</small><input type="number" data-k="' + base + '.y">' +
+            '<small>W</small><input type="number" data-k="' + base + '.w"><small>H</small><input type="number" data-k="' + base + '.h">'
+          : '<span class="sw" style="background:' + it.hex + '"></span><input type="text" data-k="' + base + '.hex">' +
+            '<small>tolerance</small><input type="number" data-k="' + base + '.tolerance">') +
+          '<button title="Remove">✕</button>';
+        row.querySelector("button").onclick = function () {
+          var list = (get(cfg, path) || []).slice();
+          list.splice(i, 1);
+          save(path, list, true);
+          buildLists();
+        };
+        box.appendChild(row);
+      });
+      var add = document.createElement("button");
+      add.textContent = areas ? "+ Add an area" : "+ Add a colour";
+      add.onclick = function () {
+        var list = (get(cfg, path) || []).slice();
+        list.push(areas ? { x: 0, y: 0, w: 100, h: 30, enabled: true } : { hex: picked || "#14151B", tolerance: 1, enabled: true });
+        save(path, list, true);
+        buildLists();
+      };
+      box.appendChild(add);
+      bindFields(box);
+      fillFields(box);
+    });
+  }
+
+  // --- live status --------------------------------------------------------------
+  var HUD = { on: "On screen", score: "Score box only", off: "Not on screen" };
+  function renderInfo() {
+    var s = info.scanner, hudOn = s.hud === "on";
+    $("#dot").className = "dot" + (s.hud === "on" ? " on" : s.hud === "score" ? " part" : "");
+    $("#status-text").textContent = (s.demo ? "Demo · " : "") + "HUD " + HUD[s.hud].toLowerCase() + " · " + s.status;
+    $$("#mode button").forEach(function (b) { b.classList.toggle("on", (b.dataset.demo === "1") === s.demo); });
+    $("#r-source").textContent = s.status + (s.fps ? " · " + s.fps + " reads/s" : "");
+    $("#r-hud").textContent = HUD[s.hud] + (s.raw !== s.hud ? " (changing)" : "") + (cfg.detector.enabled ? "" : " · auto hide is off");
+    var d = cfg.detector, c = s.colours || [];
+    function px(i, p) {
+      var got = c[i];
+      return '<span class="sw" style="background:' + (got || "transparent") + '"></span>' + (got || "–") + " (want " + p.color + ")";
+    }
+    $("#r-pixels").innerHTML = "Score box " + px(0, d.pixel1) + (d.pixel2.enabled ? " · Scoreboard " + px(1, d.pixel2) : "");
+    var chips = "";
+    for (var i = 0; i < 8; i++) {
+      var st = hudOn ? s.rows[i] : "–";
+      chips += '<div class="chip ' + st + (s.spectated[i] ? " spec" : "") + '"><span>' + (i < 4 ? "L" : "R") + (i % 4 + 1) +
+               "</span><b>" + st + "</b></div>";
+    }
+    $("#chips").innerHTML = chips;
+    var port = info.port;
+    $("#url-local").textContent = "http://localhost:" + port + "/overlay";
+    $("#lan-box").hidden = !info.lan_url;
+    if (info.lan_url) $("#url-lan").textContent = info.lan_url + "/overlay";
+    if (document.activeElement !== $("#network")) $("#network").checked = !!cfg.allow_network;
+    renderUpdate(info.update);
+  }
+
+  function load(first) {
+    return fetch("/api/state").then(function (r) { return r.json(); }).then(function (d) {
+      info = d;
+      if (first || !cfg) { cfg = d.config; defaults = d.defaults; buildRows(); bindFields(document); buildLists(); fillFields(document); }
+      else { cfg.allow_network = d.config.allow_network; }
+      renderInfo();
+    });
+  }
+  function reloadConfig() {
+    return fetch("/api/state").then(function (r) { return r.json(); }).then(function (d) {
+      info = d; cfg = d.config; buildLists(); fillFields(document); renderInfo();
+    });
+  }
+
+  // --- preview: the game picture with the overlay on top --------------------------
+  var preview = $("#preview"), frameImg = $("#frame"), picked = null;
+  function fitPreview() { $("#preview-frame").style.transform = "scale(" + preview.clientWidth / 1920 + ")"; }
+  addEventListener("resize", fitPreview);
+  function refreshFrame() {
+    var img = new Image();
+    img.onload = function () { frameImg.src = img.src; $("#no-frame").hidden = true; setTimeout(refreshFrame, 400); };
+    img.onerror = function () { $("#no-frame").hidden = false; frameImg.removeAttribute("src"); setTimeout(refreshFrame, 1000); };
+    img.src = "/api/frame.jpg?t=" + Date.now();
+  }
+  preview.addEventListener("click", function (e) {
+    var r = preview.getBoundingClientRect();
+    var x = Math.round((e.clientX - r.left) / r.width * 1920), y = Math.round((e.clientY - r.top) / r.height * 1080);
+    var mark = $("#mark");
+    mark.style.display = "block";
+    mark.style.left = (e.clientX - r.left) + "px";
+    mark.style.top = (e.clientY - r.top) + "px";
+    fetch("/api/pixel?x=" + x + "&y=" + y).then(function (r) { return r.json(); }).then(function (p) {
+      picked = p.hex;
+      $("#picked").innerHTML = "<span>X <code>" + x + "</code> Y <code>" + y + "</code></span>" +
+        (p.hex ? '<span><span class="sw" style="background:' + p.hex + '"></span><code>' + p.hex + "</code></span>" : "<span class='note' style='margin:0'>no picture</span>") +
+        '<button id="copy-pick">Copy</button>';
+      $("#copy-pick").onclick = function () { navigator.clipboard.writeText(x + ", " + y + (p.hex ? " " + p.hex : "")); };
+    });
+  });
+
+  // --- buttons ---------------------------------------------------------------------
+  $$("#mode button").forEach(function (b) {
+    b.onclick = function () { post("/api/demo", { on: b.dataset.demo === "1" }).then(function (d) { info = d; renderInfo(); }); };
+  });
+  $$("#capture-mode button").forEach(function (b) {
+    b.onclick = function () { save("capture.mode", b.dataset.mode, true); fillFields(document); };
+  });
+  $("#network").onchange = function () { post("/api/network", { on: this.checked }).then(function (d) { info = d; cfg.allow_network = d.config.allow_network; renderInfo(); }); };
+  $$("[data-copy]").forEach(function (b) { b.onclick = function () { navigator.clipboard.writeText($("#" + b.dataset.copy).textContent); }; });
+  $$("[data-reset]").forEach(function (b) {
+    b.onclick = function () {
+      if (confirm("Put the " + b.parentNode.firstChild.textContent.trim().toLowerCase() + " settings back to the defaults?"))
+        post("/api/reset", { section: b.dataset.reset }).then(reloadConfig);
+    };
+  });
+  $("#reset-cal").onclick = function () {
+    if (!confirm("Put every position and colour check back to the CoD caster HUD's defaults? (Your colours and look stay.)")) return;
+    var keep = ["pixels", "boxes", "base_color", "dim_colors", "mask_colors", "feather", "use_mask"];
+    var p = Promise.resolve();
+    keep.forEach(function (k) { p = p.then(function () { return post("/api/config", { path: "highlights." + k, value: defaults.highlights[k] }); }); });
+    ["x", "y", "w", "h", "mask_colors", "overrides", "feather"].forEach(function (k) {
+      p = p.then(function () { return post("/api/config", { path: "scorebox." + k, value: defaults.scorebox[k] }); });
+    });
+    p.then(function () { return post("/api/reset", { section: "spectated" }); })
+     .then(function () { return post("/api/reset", { section: "detector" }); }).then(reloadConfig);
+  };
+  $("#swap").onclick = function () {
+    var h = cfg.highlights, s = cfg.scorebox;
+    post("/api/config", { changes: { highlights: { color_left: h.color_right, color_right: h.color_left },
+      scorebox: { color_left: s.color_right, color_right: s.color_left,
+                  boost: { opacity_left: s.boost.opacity_right, opacity_right: s.boost.opacity_left,
+                           lightness_left: s.boost.lightness_right, lightness_right: s.boost.lightness_left } } } })
+      .then(reloadConfig);
+  };
+  $("#import-btn").onclick = function () { $("#import-file").click(); };
+  $("#import-file").onchange = function () {
+    var file = this.files[0];
+    if (!file) return;
+    file.text().then(function (text) {
+      var data;
+      try { data = JSON.parse(text); } catch (e) { alert("That isn't a settings file (" + e.message + ")"); return; }
+      return post("/api/import", data).then(reloadConfig);
+    });
+    this.value = "";
+  };
+
+  // --- log ---------------------------------------------------------------------------
+  function pollLog() {
+    fetch("/api/log?after=" + logAfter).then(function (r) { return r.json(); }).then(function (d) {
+      var box = $("#log"), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+      d.lines.forEach(function (l) {
+        logAfter = l.id;
+        var div = document.createElement("div");
+        div.className = l.level;
+        div.innerHTML = '<span class="t">' + l.time + "</span>";
+        div.appendChild(document.createTextNode(l.message));
+        box.appendChild(div);
+      });
+      if (atEnd) box.scrollTop = box.scrollHeight;
+    }).catch(function () {}).then(function () { setTimeout(pollLog, 1500); });
+  }
+
+  load(true).then(function () {
+    fitPreview();
+    refreshFrame();
+    pollLog();
+    setInterval(function () { load(false).catch(function () {}); }, 500);
+  });
+})();
+</script>
+</body>
+</html>

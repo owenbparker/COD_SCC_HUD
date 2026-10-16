@@ -1,0 +1,280 @@
+"""The running app: the scanner reading the game, and the web server for the
+overlay (a browser source in vMix / OBS) and the control panel."""
+
+import io
+import json
+import mimetypes
+import os
+import socket
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, unquote, urlparse
+
+from . import detect
+from .config import DATA_DIR, DEFAULTS, WEB_DIR, from_suite
+from .log import log, since
+from .scanner import Hub, Scanner
+from .updater import Updater, clean_up_old_update
+
+mimetypes.add_type("font/ttf", ".ttf")
+
+PAGES = {"/control": "control.html", "/overlay": "overlay.html"}
+
+
+class HudApp:
+    def __init__(self, config, demo=False):
+        self.config = config
+        self.hub = Hub()
+        self.scanner = Scanner(config, self.hub, demo=demo)
+        self.updater = Updater()
+        self.server = None
+        self._config_version = config.version
+
+    def stop(self):
+        self.scanner.stop()
+        if self.server:
+            self.server.stop()
+
+    def host(self):
+        cfg = self.config.get()
+        return "0.0.0.0" if cfg.get("allow_network") else cfg["http_host"]
+
+    def set_network(self, enabled):
+        self.config.update({"allow_network": bool(enabled)})
+        if self.server:
+            self.server.restart(self.host())
+        log("Other PCs on your network can now load the overlay" if enabled else "The overlay is now only reachable from this PC")
+
+    def changed_config(self):
+        """Settings changed: the overlay pages pick up the new look."""
+        self.hub.touch()
+
+    def info(self):
+        cfg = self.config.get()
+        port = self.server.port if self.server else cfg["http_port"]
+        lan = lan_ip() if cfg.get("allow_network") else None
+        return {"config": cfg, "defaults": DEFAULTS, "scanner": self.scanner.info(), "update": self.updater.info(),
+                "port": port, "lan_url": f"http://{lan}:{port}" if lan else None, "data_dir": DATA_DIR}
+
+    def look(self):
+        """What the overlay needs of the settings."""
+        cfg = self.config.get()
+        h = dict(cfg["highlights"])
+        h.pop("pixels", None)
+        return {"highlights": h, "scorebox": cfg["scorebox"]}
+
+    def frame_jpeg(self, width=960):
+        frame = self.scanner.frame
+        if frame is None:
+            return None
+        from PIL import Image
+        img = Image.fromarray(frame)
+        img = img.resize((width, width * 9 // 16), Image.BILINEAR)
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=80)
+        return buf.getvalue()
+
+    def pixel(self, x, y):
+        frame = self.scanner.frame
+        rgb = detect.pixel(frame, x, y) if frame is not None else None
+        return {"x": x, "y": y, "hex": detect.rgb_hex(rgb) if rgb else None}
+
+
+def lan_ip():
+    """This PC's address on the local network (no traffic is sent)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))
+            return s.getsockname()[0]
+    except OSError:
+        return None
+
+
+def _is_local(address):
+    return address in ("127.0.0.1", "::1") or address.startswith("127.")
+
+
+def web_file(rel):
+    rel = rel.replace("\\", "/").lstrip("/")
+    path = os.path.normpath(os.path.join(WEB_DIR, rel))
+    if not path.startswith(os.path.normpath(WEB_DIR) + os.sep) or not os.path.isfile(path):
+        return None
+    return path
+
+
+def make_handler(app):
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, *args):
+            pass
+
+        def _send(self, body, ctype="application/json", status=200):
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _json(self, data, status=200):
+            self._send(json.dumps(data), status=status)
+
+        def _file(self, rel):
+            path = web_file(rel)
+            if not path:
+                return self._json({"error": "not found"}, 404)
+            with open(path, "rb") as f:
+                self._send(f.read(), mimetypes.guess_type(path)[0] or "application/octet-stream")
+
+        def _stream(self):
+            """Server-sent events: the reading, every time it changes, with each
+            mask sent only when this page doesn't have it yet."""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            self.wfile.write(b"retry: 1000\n\n")
+            have, version, config_version = {}, -1, None
+            try:
+                while True:
+                    new, state, masks = app.hub.wait(version, timeout=15)
+                    if new == version:
+                        self.wfile.write(b": keep-alive\n\n")
+                        self.wfile.flush()
+                        continue
+                    version = new
+                    msg = dict(state, masks={k: m["id"] for k, m in masks.items()},
+                               detector=app.config.get()["detector"].get("enabled", True))
+                    send = {k: m for k, m in masks.items() if have.get(k) != m["id"]}
+                    if send:
+                        msg["mask_data"] = send
+                        have.update({k: m["id"] for k, m in send.items()})
+                    if app.config.version != config_version:
+                        config_version = app.config.version
+                        msg["look"] = app.look()
+                    self.wfile.write(b"data: " + json.dumps(msg).encode("utf-8") + b"\n\n")
+                    self.wfile.flush()
+            except (ConnectionError, OSError):
+                pass
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def do_GET(self):
+            url = urlparse(self.path)
+            path = url.path
+            query = parse_qs(url.query)
+            if path == "/":
+                self.send_response(302)
+                self.send_header("Location", "/control")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            elif path in PAGES:
+                self._file(PAGES[path])
+            elif path == "/api/stream":
+                self._stream()
+            elif path == "/api/state":
+                self._json(app.info())
+            elif path == "/api/log":
+                self._json({"lines": since(int((query.get("after") or ["0"])[0]))})
+            elif path == "/api/frame.jpg":
+                body = app.frame_jpeg(min(1920, int((query.get("width") or ["960"])[0])))
+                if body is None:
+                    return self._json({"error": "no picture yet"}, 404)
+                self._send(body, "image/jpeg")
+            elif path == "/api/pixel":
+                self._json(app.pixel(int(query["x"][0]), int(query["y"][0])))
+            else:
+                self._file(unquote(path))
+
+        def do_POST(self):
+            if not _is_local(self.client_address[0]):
+                return self._json({"error": "settings can only be changed on the HUD's own PC"}, 403)
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                body = json.loads(self.rfile.read(length) or b"{}")
+                path = urlparse(self.path).path
+                if path == "/api/config":
+                    # {"path": "highlights.opacity", "value": 0.3} or {"changes": {...}}
+                    if "path" in body:
+                        app.config.set(body["path"], body["value"])
+                    else:
+                        app.config.update(body.get("changes") or {})
+                    app.changed_config()
+                elif path == "/api/reset":
+                    section = body.get("section")
+                    if section not in DEFAULTS or not isinstance(DEFAULTS[section], dict):
+                        raise ValueError(f"no settings called {section!r}")
+                    app.config.set(section, DEFAULTS[section])
+                    app.changed_config()
+                    log(f"Reset the {section} settings")
+                elif path == "/api/import":
+                    app.config.replace(from_suite(body, app.config.get()))
+                    app.changed_config()
+                    log("Imported the CoD Scoreboard Suite's settings")
+                elif path == "/api/demo":
+                    app.scanner.set_demo(bool(body.get("on")))
+                elif path == "/api/network":
+                    app.set_network(bool(body.get("on")))
+                elif path == "/api/update/check":
+                    app.updater.check()
+                elif path == "/api/update/install":
+                    app.updater.install_in_background()
+                else:
+                    return self._json({"error": "not found"}, 404)
+                self._json(app.info())
+            except (ValueError, KeyError, IndexError, TypeError, OSError) as e:
+                self._json({"error": str(e)}, 400)
+
+    return Handler
+
+
+class Server:
+    """The HTTP server in a background thread; can be restarted on a new host."""
+
+    def __init__(self, app, host, port):
+        self.app, self.port = app, port
+        self.httpd = None
+        self._start(host)
+
+    def _start(self, host):
+        self.httpd = ThreadingHTTPServer((host, self.port), make_handler(self.app))
+        self.httpd.daemon_threads = True
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.host = host
+
+    def restart(self, host):
+        if host == self.host:
+            return
+        old = self.httpd
+        old.shutdown()
+        old.server_close()
+        self._start(host)
+
+    def stop(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+def start(app):
+    """Start the web server and the scanner. Raises OSError if the port is taken."""
+    port = app.config.get()["http_port"]
+    app.server = Server(app, app.host(), port)
+    app.scanner.start()
+    clean_up_old_update()
+    app.updater.check_in_background()
+    log(f"CoD HUD {app.updater.current} running - control panel http://localhost:{port}/control")
+    log(f"Overlay (browser source, 1920x1080): http://localhost:{port}/overlay")
+    return app.server

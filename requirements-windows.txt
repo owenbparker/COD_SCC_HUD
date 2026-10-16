@@ -1,0 +1,4 @@
+# Desktop app extras (Windows): the app window, and reading the game's picture.
+pywebview
+pillow
+numpy
