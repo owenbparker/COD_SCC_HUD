@@ -21,6 +21,8 @@ RESOURCE_DIR = getattr(sys, "_MEIPASS", ROOT) if FROZEN else ROOT
 DATA_DIR = os.path.dirname(os.path.abspath(sys.executable)) if FROZEN else ROOT
 WEB_DIR = os.path.join(RESOURCE_DIR, "web")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+# Team logos added from the control panel (served as logos/...).
+LOGO_DIR = os.path.join(DATA_DIR, "logos")
 
 ROW_YS = (110, 142, 174, 206)
 BOX_YS = (97, 129, 161, 193)
@@ -111,7 +113,29 @@ DEFAULTS = {
 
     # Who's being spectated: their scoreboard row turns from idle_color to the
     # game's highlight. One pixel per row, in the name cell.
-    "spectated": {"idle_color": "#14151B", "pixels": _rows((444, 1664), SPEC_YS)},
+    "spectated": {"idle_color": "#14151B", "tolerance": 2, "pixels": _rows((444, 1664), SPEC_YS)},
+
+    # The match, shown by the title over the CoD caster HUD (the BO7 In Game
+    # Scoreboard): each team's name plate, logo and record line, the series
+    # score, and the maps of the series along the bottom.
+    "match": {
+        "left": {"name": "FUEL ESPORTS", "tricode": "FUEL", "record": "SEASON RECORD: 0-0", "logo": "", "wins": 0},
+        "right": {"name": "ST. CLAIR SAINTS", "tricode": "SCC", "record": "SEASON RECORD: 5-4",
+                  "logo": "assets/logos/st-clair-saints.png", "wins": 0},
+        "best_of": 5,
+        # Each map: "NAME // MODE" and who won it ("left", "right" or "").
+        "maps": [{"name": n, "winner": ""} for n in (
+            "COLOSSUS // HARDPOINT", "COLOSSUS // HARDPOINT", "COLOSSUS // HARDPOINT", "COLOSSUS // HARDPOINT",
+            "GRIDLOCK // SEARCH & DESTROY", "COLOSSUS // HARDPOINT", "COLOSSUS // HARDPOINT")],
+        "map_count": 7,
+        "current_map": 0,
+    },
+    # Which parts of the title show.
+    "title": {"enabled": True, "plates": True, "score_box": True, "best_of_text": True, "maps": True},
+    # The title's fonts: installed on this PC (sent to the overlay, so it
+    # shows them on any PC); Bebas Neue when one isn't installed.
+    "fonts": {"name": "Hitmarker", "tricode": "Hitmarker Normal", "record": "Dharma Gothic E",
+              "maps": "Dharma Gothic E", "best_of": "Competition Solid"},
 }
 
 _lock = threading.Lock()

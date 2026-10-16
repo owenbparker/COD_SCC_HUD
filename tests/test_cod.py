@@ -74,6 +74,19 @@ class DetectorTests(unittest.TestCase):
         self.assertTrue((digits.max(axis=-1) > 200).any())
         self.assertLess(score[42:72, 207:267].min(), 255)
 
+    def test_real_screenshot(self):
+        """The demo's screenshot of the CoD caster HUD (BO7): HUD up, the bomb
+        carrier's and the spectated player's icon cells lit, BigR3aL spectated."""
+        from codhud.demo import ScreenshotDemo
+        shown, hidden = ScreenshotDemo().frames()
+        self.assertEqual(detect.hud_reading(shown, DEFAULTS)[0], "on")
+        self.assertEqual(detect.hud_reading(hidden, DEFAULTS)[0], "off")
+        self.assertEqual(detect.row_states(shown, DEFAULTS), ["normal", "bright", "normal", "bright"] + ["normal"] * 4)
+        self.assertEqual(detect.spectated(shown, DEFAULTS), [i == 3 for i in range(8)])
+        masks = detect.row_masks(shown, DEFAULTS)
+        self.assertEqual(masks[3].max(), 0)               # the spectated row: no glow
+        self.assertGreater((masks[0] == 255).mean(), 0.8)
+
     def test_colour_mask_feather(self):
         region = np.array([[[0x14, 0x15, 0x1B], [0x14 + 5, 0x15, 0x1B], [0x14 + 40, 0x15, 0x1B]]], dtype=np.uint8)
         m = detect.colour_mask(region, [{"hex": "#14151B", "tolerance": 1}], 15)
@@ -164,6 +177,20 @@ class ServerTests(unittest.TestCase):
                 post("/api/reset", {"section": "scorebox"})
                 with self.assertRaises(urllib.error.HTTPError):
                     post("/api/reset", {"section": "nope"})
+                self.assertIn("assets/logos/st-clair-saints.png", json.loads(urllib.request.urlopen(base + "/api/logos").read())["logos"])
+                png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+                import codhud.app as appmod
+                old = appmod.LOGO_DIR
+                appmod.LOGO_DIR = os.path.join(tmp, "logos")
+                try:
+                    got = post("/api/logo", {"name": "Fuel Logo.png", "data": png, "team": "left"})
+                    self.assertEqual(got["config"]["match"]["left"]["logo"], "logos/Fuel Logo.png")
+                    self.assertTrue(os.path.isfile(os.path.join(tmp, "logos", "Fuel Logo.png")))
+                finally:
+                    appmod.LOGO_DIR = old
+                self.assertIsInstance(json.loads(urllib.request.urlopen(base + "/api/fonts", timeout=20).read())["fonts"], list)
+                with self.assertRaises(urllib.error.HTTPError):
+                    urllib.request.urlopen(base + "/fonts/local/No%20Such%20Font", timeout=5)
                 frame = urllib.request.urlopen(base + "/api/frame.jpg", timeout=5).read()
                 self.assertEqual(frame[:2], b"\xff\xd8")
                 px = json.loads(urllib.request.urlopen(base + "/api/pixel?x=960&y=57", timeout=5).read())

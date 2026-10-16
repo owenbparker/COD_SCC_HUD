@@ -1,8 +1,10 @@
 """The running app: the scanner reading the game, and the web server for the
 overlay (a browser source in vMix / OBS) and the control panel."""
 
+import base64
 import io
 import json
+import re
 import mimetypes
 import os
 import socket
@@ -10,8 +12,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import detect
-from .config import DATA_DIR, DEFAULTS, WEB_DIR, from_suite
+from . import detect, fonts
+from .config import DATA_DIR, DEFAULTS, LOGO_DIR, WEB_DIR, from_suite
 from .log import log, since
 from .scanner import Hub, Scanner
 from .updater import Updater, clean_up_old_update
@@ -61,7 +63,29 @@ class HudApp:
         cfg = self.config.get()
         h = dict(cfg["highlights"])
         h.pop("pixels", None)
-        return {"highlights": h, "scorebox": cfg["scorebox"]}
+        return {"highlights": h, "scorebox": cfg["scorebox"], "match": cfg["match"], "title": cfg["title"],
+                "fonts": cfg["fonts"]}
+
+    def logos(self):
+        """The team logos to pick from: the bundled ones and those added here."""
+        found = []
+        for folder, prefix in ((os.path.join(WEB_DIR, "assets", "logos"), "assets/logos/"), (LOGO_DIR, "logos/")):
+            if os.path.isdir(folder):
+                found += [prefix + n for n in sorted(os.listdir(folder)) if n.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".svg"))]
+        return found
+
+    def add_logo(self, name, data_url):
+        """Saves an uploaded logo; returns its path for the settings."""
+        m = re.fullmatch(r"data:image/(png|jpeg|webp|svg\+xml);base64,(.+)", data_url or "", re.S)
+        if not m:
+            raise ValueError("send the logo as a PNG, JPG, WebP or SVG image")
+        ext = {"png": ".png", "jpeg": ".jpg", "webp": ".webp", "svg+xml": ".svg"}[m.group(1)]
+        stem = re.sub(r"[^A-Za-z0-9 _.-]+", "", os.path.splitext(os.path.basename(name or "logo"))[0]).strip() or "logo"
+        os.makedirs(LOGO_DIR, exist_ok=True)
+        with open(os.path.join(LOGO_DIR, stem + ext), "wb") as f:
+            f.write(base64.b64decode(m.group(2)))
+        log(f"Added the logo {stem}{ext}")
+        return "logos/" + stem + ext
 
     def frame_jpeg(self, width=960):
         frame = self.scanner.frame
@@ -95,9 +119,14 @@ def _is_local(address):
 
 
 def web_file(rel):
+    """Path on disk for a URL path; uploaded logos are served as logos/...,
+    everything else comes from the web folder. Paths that climb out are refused."""
     rel = rel.replace("\\", "/").lstrip("/")
-    path = os.path.normpath(os.path.join(WEB_DIR, rel))
-    if not path.startswith(os.path.normpath(WEB_DIR) + os.sep) or not os.path.isfile(path):
+    base = WEB_DIR
+    if rel.startswith("logos/"):
+        base, rel = LOGO_DIR, rel[len("logos/"):]
+    path = os.path.normpath(os.path.join(base, rel))
+    if not path.startswith(os.path.normpath(base) + os.sep) or not os.path.isfile(path):
         return None
     return path
 
@@ -123,8 +152,8 @@ def make_handler(app):
         def _json(self, data, status=200):
             self._send(json.dumps(data), status=status)
 
-        def _file(self, rel):
-            path = web_file(rel)
+        def _file(self, rel, path=None):
+            path = path or (web_file(rel) if rel else None)
             if not path:
                 return self._json({"error": "not found"}, 404)
             with open(path, "rb") as f:
@@ -194,6 +223,13 @@ def make_handler(app):
                 if body is None:
                     return self._json({"error": "no picture yet"}, 404)
                 self._send(body, "image/jpeg")
+            elif path == "/api/fonts":
+                self._json({"fonts": fonts.families()})
+            elif path.startswith("/fonts/local/"):
+                # An installed font, for the title's text on any PC.
+                self._file(None, fonts.path_of(unquote(path[len("/fonts/local/"):])))
+            elif path == "/api/logos":
+                self._json({"logos": app.logos()})
             elif path == "/api/pixel":
                 self._json(app.pixel(int(query["x"][0]), int(query["y"][0])))
             else:
@@ -224,6 +260,11 @@ def make_handler(app):
                     app.config.replace(from_suite(body, app.config.get()))
                     app.changed_config()
                     log("Imported the CoD Scoreboard Suite's settings")
+                elif path == "/api/logo":
+                    logo = app.add_logo(body.get("name"), body.get("data"))
+                    if body.get("team") in ("left", "right"):
+                        app.config.set(f"match.{body['team']}.logo", logo)
+                        app.changed_config()
                 elif path == "/api/demo":
                     app.scanner.set_demo(bool(body.get("on")))
                 elif path == "/api/network":
@@ -273,6 +314,7 @@ def start(app):
     port = app.config.get()["http_port"]
     app.server = Server(app, app.host(), port)
     app.scanner.start()
+    threading.Thread(target=fonts.installed, daemon=True).start()   # (the font list, ready for the panel)
     clean_up_old_update()
     app.updater.check_in_background()
     log(f"CoD HUD {app.updater.current} running - control panel http://localhost:{port}/control")

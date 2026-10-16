@@ -130,10 +130,11 @@ def spectated(frame, cfg):
     """Each row: is it the spectated player's (its name cell isn't the idle colour)."""
     s = cfg["spectated"]
     idle = hex_rgb(s["idle_color"])
+    tolerance = float(s.get("tolerance", 0))
     out = []
     for p in s["pixels"][:8]:
         rgb = pixel(frame, p["x"], p["y"]) if p.get("enabled", True) else None
-        out.append(rgb is not None and rgb != idle)
+        out.append(rgb is not None and not matches(rgb, idle, tolerance))
     return out
 
 

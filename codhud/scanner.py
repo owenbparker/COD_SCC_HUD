@@ -11,7 +11,7 @@ import time
 
 from . import detect
 from .capture import Capture, make_dpi_aware
-from .demo import DemoGame
+from .demo import ScreenshotDemo
 from .log import log
 
 # Masks (the expensive part) are worked out at most this often.
@@ -66,7 +66,7 @@ class Scanner:
         self.hub = hub
         self.demo = demo
         self.capture = Capture()
-        self.game = DemoGame()
+        self.game = ScreenshotDemo()
         self.debounce = detect.HudDebounce()
         self.frame = None
         self.status = "Starting"
@@ -81,7 +81,7 @@ class Scanner:
 
     def set_demo(self, on):
         self.demo = bool(on)
-        self.game = DemoGame()
+        self.game = ScreenshotDemo()
         self.debounce = detect.HudDebounce()
         log("Demo match started" if on else "Reading the game")
 

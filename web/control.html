@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="icon" href="assets/app_icon.png">
+<link rel="icon" href="assets/logo-black.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="assets/logo-white.png" media="(prefers-color-scheme: dark)">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CoD HUD Control</title>
 <style>
@@ -13,6 +14,22 @@
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", system-ui, sans-serif; }
   header { display: flex; align-items: center; gap: 14px; height: 54px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
   header h1 { margin: 0; font-size: 16px; font-weight: 700; }
+  header .brand { width: 30px; height: 30px; object-fit: contain; margin-right: -4px; }
+  .teams { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .team { border-top: 4px solid var(--tc, #555); padding-top: 6px; }
+  .team .logo-row { display: flex; gap: 8px; align-items: center; }
+  .team .logo-row img { width: 48px; height: 48px; object-fit: contain; background: #000; border-radius: 6px; flex: 0 0 48px; }
+  .team .logo-row select { flex: 1; min-width: 0; }
+  .team .logo-row button { flex: 0 0 auto; }
+  .wins { display: flex; align-items: center; gap: 8px; }
+  .wins b { font-size: 22px; min-width: 28px; text-align: center; }
+  .wins button { flex: 0 0 40px; font-size: 18px; padding: 2px; }
+  .maps-list .m { display: grid; grid-template-columns: 54px minmax(0, 1fr) 160px auto; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .maps-list .m span { color: var(--muted); font-size: 12px; }
+  .maps-list .m label { margin: 0; display: flex; gap: 4px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .maps-list .m input[type=radio] { width: auto; accent-color: var(--accent); }
+  .maps-list .m.off { opacity: .4; }
+  @media (max-width: 700px) { .teams { grid-template-columns: 1fr; } }
   .status { display: flex; align-items: center; gap: 8px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .dot { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; background: #c0392b; }
   .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
@@ -100,6 +117,7 @@
 </head>
 <body>
 <header>
+  <img class="brand" src="assets/logo-white.png" alt="">
   <h1>SCC CoD HUD</h1>
   <div class="status"><span class="dot" id="dot"></span><span id="status-text">Starting…</span></div>
   <div class="spacer"></div>
@@ -120,6 +138,43 @@
     <h3>Scoreboard rows (glow)</h3>
     <div class="chips" id="chips"></div>
     <p class="note">Each row's glow is normal, <b class="warn">bright</b> (an objective icon), or dim (a skull). The spectated player's row is outlined.</p>
+  </section>
+
+  <section class="wide">
+    <h2>Match</h2>
+    <div class="teams">
+      <div class="team" data-team="left" style="--tc: #AE2626"></div>
+      <div class="team" data-team="right" style="--tc: #771116"></div>
+    </div>
+    <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+    <div class="two" style="margin-top: 6px">
+      <div><label>Series</label><select data-k="match.best_of" data-num="1">
+        <option value="1">Best of 1</option><option value="3">Best of 3</option><option value="5">Best of 5</option>
+        <option value="7">Best of 7</option><option value="9">Best of 9</option></select></div>
+      <div><label>Maps in the strip</label><select data-k="match.map_count" data-num="1">
+        <option value="0">None</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
+        <option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select></div>
+    </div>
+    <h3>Maps (the strip along the bottom)</h3>
+    <div class="maps-list" id="maps-list"></div>
+    <h3>Show</h3>
+    <div class="row" style="flex-wrap: wrap">
+      <label class="toggle"><input type="checkbox" data-k="title.enabled"> The title</label>
+      <label class="toggle"><input type="checkbox" data-k="title.plates"> Name plates</label>
+      <label class="toggle"><input type="checkbox" data-k="title.score_box"> Score box logos &amp; series</label>
+      <label class="toggle"><input type="checkbox" data-k="title.best_of_text"> "Best of" text</label>
+      <label class="toggle"><input type="checkbox" data-k="title.maps"> Map strip</label>
+    </div>
+    <details><summary>Fonts</summary>
+      <p class="note">Fonts installed on this PC; the overlay gets them from here, so they show in vMix / OBS on any PC. Bebas Neue is used when a font isn't installed.</p>
+      <div class="two">
+        <div><label>Team names</label><select class="font" data-k="fonts.name"></select></div>
+        <div><label>Tricodes</label><select class="font" data-k="fonts.tricode"></select></div>
+        <div><label>Record lines</label><select class="font" data-k="fonts.record"></select></div>
+        <div><label>Maps</label><select class="font" data-k="fonts.maps"></select></div>
+        <div><label>"Best of"</label><select class="font" data-k="fonts.best_of"></select></div>
+      </div>
+    </details>
   </section>
 
   <section>
@@ -420,6 +475,94 @@
     });
   }
 
+  // --- the match ----------------------------------------------------------------
+  var logos = [], logoFor = null;
+  function buildTeams() {
+    $$(".team").forEach(function (box) {
+      var side = box.dataset.team, base = "match." + side;
+      box.innerHTML = '<label>' + (side === "left" ? "Left team" : "Right team") + '</label>' +
+        '<input type="text" data-k="' + base + '.name" placeholder="Team name">' +
+        '<div class="two"><div><label>Tricode</label><input type="text" data-k="' + base + '.tricode" maxlength="6"></div>' +
+        '<div><label>Maps won</label><div class="wins"><button data-win="-1">−</button><b class="w"></b><button data-win="1">+</button></div></div></div>' +
+        '<label>Record line</label><input type="text" data-k="' + base + '.record">' +
+        '<label>Logo</label><div class="logo-row"><img alt=""><select class="logo-pick"></select><button class="up">Add…</button></div>';
+      box.querySelector(".logo-pick").onchange = function () { save(base + ".logo", this.value, true); renderTeams(); };
+      box.querySelector(".up").onclick = function () { logoFor = side; $("#logo-file").click(); };
+      $$("[data-win]", box).forEach(function (b) {
+        b.onclick = function () {
+          var need = Math.ceil(cfg.match.best_of / 2), w = Math.max(0, Math.min(need, (cfg.match[side].wins || 0) + Number(b.dataset.win)));
+          save(base + ".wins", w, true); renderTeams();
+        };
+      });
+    });
+  }
+  function renderTeams() {
+    $$(".team").forEach(function (box) {
+      var t = cfg.match[box.dataset.team], pick = box.querySelector(".logo-pick");
+      pick.innerHTML = '<option value="">No logo</option>' + logos.map(function (l) {
+        return '<option value="' + l + '">' + l.split("/").pop().replace(/\.[a-z]+$/i, "") + "</option>";
+      }).join("");
+      pick.value = t.logo || "";
+      var im = box.querySelector("img");
+      if (t.logo) im.src = t.logo; else im.removeAttribute("src");
+      box.querySelector(".w").textContent = t.wins || 0;
+    });
+    box_colours();
+  }
+  function box_colours() {
+    $('.team[data-team="left"]').style.setProperty("--tc", cfg.highlights.color_left);
+    $('.team[data-team="right"]').style.setProperty("--tc", cfg.highlights.color_right);
+  }
+  function loadLogos() {
+    return fetch("/api/logos").then(function (r) { return r.json(); }).then(function (d) { logos = d.logos; renderTeams(); });
+  }
+  $("#logo-file").onchange = function () {
+    var file = this.files[0], side = logoFor;
+    this.value = "";
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      post("/api/logo", { name: file.name, data: reader.result, team: side }).then(function (d) {
+        cfg = d.config; info = d; return loadLogos();
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+  function buildMaps() {
+    var html = "";
+    for (var i = 0; i < 7; i++) {
+      var b = "match.maps." + i;
+      html += '<div class="m" data-i="' + i + '"><span>Map ' + (i + 1) + '</span><input type="text" data-k="' + b + '.name">' +
+        '<select data-k="' + b + '.winner"><option value="">Not played yet</option><option value="left">Left team won</option>' +
+        '<option value="right">Right team won</option></select>' +
+        '<label><input type="radio" name="current" value="' + i + '"> Playing</label></div>';
+    }
+    $("#maps-list").innerHTML = html;
+    $$('#maps-list input[type=radio]').forEach(function (r) {
+      r.onchange = function () { save("match.current_map", Number(r.value), true); };
+    });
+  }
+  function renderMaps() {
+    $$("#maps-list .m").forEach(function (row) {
+      var i = Number(row.dataset.i);
+      row.classList.toggle("off", i >= cfg.match.map_count);
+      row.querySelector("input[type=radio]").checked = i === Number(cfg.match.current_map);
+    });
+  }
+  function loadFonts() {
+    return fetch("/api/fonts").then(function (r) { return r.json(); }).then(function (d) {
+      $$("select.font").forEach(function (sel) {
+        var want = get(cfg, sel.dataset.k) || "", names = d.fonts.slice();
+        if (want && names.indexOf(want) < 0) names.unshift(want);
+        sel.innerHTML = '<option value="">Bebas Neue (built in)</option>' + names.map(function (n) {
+          var missing = d.fonts.indexOf(n) < 0 ? " (not installed here)" : "";
+          return '<option value="' + n.replace(/"/g, "&quot;") + '">' + n + missing + "</option>";
+        }).join("");
+        sel.value = want;
+      });
+    });
+  }
+
   // --- live status --------------------------------------------------------------
   var HUD = { on: "On screen", score: "Score box only", off: "Not on screen" };
   function renderInfo() {
@@ -453,14 +596,18 @@
   function load(first) {
     return fetch("/api/state").then(function (r) { return r.json(); }).then(function (d) {
       info = d;
-      if (first || !cfg) { cfg = d.config; defaults = d.defaults; buildRows(); bindFields(document); buildLists(); fillFields(document); }
+      if (first || !cfg) {
+        cfg = d.config; defaults = d.defaults;
+        buildRows(); buildTeams(); buildMaps(); bindFields(document); buildLists(); fillFields(document);
+        renderMaps(); loadLogos(); loadFonts();
+      }
       else { cfg.allow_network = d.config.allow_network; }
       renderInfo();
     });
   }
   function reloadConfig() {
     return fetch("/api/state").then(function (r) { return r.json(); }).then(function (d) {
-      info = d; cfg = d.config; buildLists(); fillFields(document); renderInfo();
+      info = d; cfg = d.config; buildLists(); fillFields(document); renderInfo(); renderTeams(); renderMaps();
     });
   }
 

@@ -11,9 +11,11 @@ import argparse
 import json
 import os
 import sys
+import threading
 import urllib.request
 import webbrowser
 
+from . import theme
 from .__main__ import add_arguments, build_app
 from .app import start
 from .config import DATA_DIR
@@ -44,7 +46,8 @@ def smoke_test(port):
     to the app."""
     import time
     results, ok = [], True
-    for path in ("/control", "/overlay", "/api/state", "/api/log", "/fonts/Inter.ttf", "/assets/app_icon.png"):
+    for path in ("/control", "/overlay", "/api/state", "/api/log", "/api/fonts", "/api/logos", "/fonts/Inter.ttf",
+                 "/fonts/BebasNeue.ttf", "/assets/icon-white.ico", "/assets/demo/game.png", "/assets/title/map_labels.png"):
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as r:
                 results.append(f"OK   {path} ({len(r.read())} bytes)")
@@ -111,10 +114,15 @@ def main():
         return 0 if ok else 1
 
     url = f"http://127.0.0.1:{port}/control"
+    stop_theme = threading.Event()
     try:
         import webview
-        window = webview.create_window(f"{TITLE} {app.updater.current}", url, width=1280, height=760,
+        window_title = f"{TITLE} {app.updater.current}"
+        window = webview.create_window(window_title, url, width=1280, height=760,
                                        min_size=(960, 600), background_color="#0e1012", text_select=True)
+        # The skull in white on a dark taskbar / title bar, black on a light one.
+        theme.update_shortcut_icon()
+        theme.follow_theme(window_title, stop_theme)
         # Installing an update closes the window; the updater restarts the app.
         app.updater.on_exit = window.destroy
         webview.start(debug=args.debug)
@@ -126,6 +134,7 @@ def main():
             message_box("The control panel has opened in your web browser.\n\n"
                         "The HUD keeps running until you close this box.")
     finally:
+        stop_theme.set()
         if own_server:
             app.stop()
     return 0

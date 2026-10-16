@@ -125,3 +125,31 @@ class DemoGame:
         if self._cache[0] != key:
             self._cache = (key, self.draw(m))
         return self._cache[1], "Demo match"
+
+
+class ScreenshotDemo:
+    """The demo match the app plays: a real screenshot of the CoD caster HUD
+    (web/assets/demo/game.png). Every 40 seconds the HUD goes away for a few
+    seconds (blurred out, as in a killcam), so the overlay's auto hide shows."""
+
+    PATH = os.path.join(WEB_DIR, "assets", "demo", "game.png")
+
+    def __init__(self):
+        self._t0 = None
+        self._frames = None
+
+    def frames(self):
+        if self._frames is None:
+            from PIL import Image, ImageFilter
+            img = Image.open(self.PATH).convert("RGB")
+            hidden = img.copy()
+            for box in ((0, 0, 1920, 260), (0, 1030, 1920, 1080)):
+                hidden.paste(img.crop(box).filter(ImageFilter.GaussianBlur(12)), box[:2])
+            self._frames = (np.asarray(img), np.asarray(hidden))
+        return self._frames
+
+    def grab(self, cfg, now):
+        if self._t0 is None:
+            self._t0 = now
+        shown, hidden = self.frames()
+        return (hidden if 34 <= (now - self._t0) % 40 < 37 else shown), "Demo (a CoD caster HUD screenshot)"

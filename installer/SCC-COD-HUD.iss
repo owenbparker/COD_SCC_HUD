@@ -43,8 +43,10 @@ SolidCompression=yes
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Icons]
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\CodHUD.exe"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\CodHUD.exe"; WorkingDir: "{app}"
+; shortcut.ico is the skull for the PC's theme (white on a dark taskbar,
+; black on a light one); the app keeps it that way when the theme changes.
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\CodHUD.exe"; WorkingDir: "{app}"; IconFilename: "{app}\shortcut.ico"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\CodHUD.exe"; WorkingDir: "{app}"; IconFilename: "{app}\shortcut.ico"
 
 [Run]
 Filename: "{app}\CodHUD.exe"; WorkingDir: "{app}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
@@ -56,6 +58,7 @@ Type: filesandordirs; Name: "{app}\_internal"
 Type: filesandordirs; Name: "{app}\_update"
 Type: files; Name: "{app}\CodHUD.exe"
 Type: files; Name: "{app}\README.md"
+Type: files; Name: "{app}\shortcut.ico"
 Type: files; Name: "{app}\smoke-test.txt"
 
 [Messages]
@@ -132,6 +135,7 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Tmp, App: String;
   Code: Integer;
+  Light: Cardinal;
 begin
   Result := DownloadLatest;  { silent installs skip the Ready page }
   if Result <> '' then
@@ -162,8 +166,18 @@ begin
     Exit;
   end;
   Code := RunHidden('robocopy.exe', '"' + Tmp + '\new" "' + App + '" /XD _internal /R:3 /W:1 /NFL /NDL /NJH /NJS /NP');
-  if (Code < 0) or (Code >= 8) then
+  if (Code < 0) or (Code >= 8) then begin
     Result := 'Copying files failed (robocopy ' + IntToStr(Code) + ').';
+    Exit;
+  end;
+  { The shortcuts' icon: the white skull on a dark taskbar, black on a light one. }
+  if not RegQueryDWordValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize',
+      'SystemUsesLightTheme', Light) then
+    Light := 0;
+  if Light = 1 then
+    FileCopy(App + '\_internal\web\assets\icon-black.ico', App + '\shortcut.ico', False)
+  else
+    FileCopy(App + '\_internal\web\assets\icon-white.ico', App + '\shortcut.ico', False);
 end;
 
 function InitializeUninstall: Boolean;

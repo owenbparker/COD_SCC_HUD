@@ -11,18 +11,61 @@
     - the score box's background, recoloured with a gradient between the
       two teams' colours (the side of the spectated player's team lights up).
   Only the HUD's background is painted (the masks the app sends are where
-  it is), so its text, numbers and icons show through untouched. Nothing
-  shows while the CoD caster HUD is off screen.
+  it is), so its text, numbers and icons show through untouched.
+
+  On top of that, the title (the BO7 In Game Scoreboard vMix title): each
+  team's name plate, logo and record line over the HUD's own team bars, the
+  logos, tricodes and series score in the score box, and the maps of the
+  series along the bottom. Everything shows only while the CoD caster HUD is
+  on screen.
 
   The glow and gradient are the CoD Scoreboard Suite's, drawn here instead.
 -->
 <style>
   html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
-  canvas { position: absolute; display: none; }
+  @font-face { font-family: "SCC fallback"; src: url("fonts/BebasNeue.ttf") format("truetype"); }
+  canvas { position: absolute; display: none; z-index: 1; }
   canvas.on { display: block; }
+  /* The title: positions and sizes are the vMix title's. */
+  #title { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 2; }
+  #title > div { display: none; }
+  #title > div.on { display: block; }
+  .abs { position: absolute; }
+  .clip { position: absolute; overflow: hidden; }
+  .logo { position: absolute; object-fit: contain; }
+  .text { position: absolute; color: #fff; white-space: nowrap; display: flex; align-items: center; }
+  .plate { background: #000; }
+  .record-bg { background: #343642; }
+  .name { font-family: var(--f-name); font-size: 50px; font-weight: 500; font-stretch: condensed; }
+  .record { font-family: var(--f-record); font-size: 28px; font-weight: 100; text-shadow: 0 0 3px rgba(0, 0, 0, .9); }
+  .tricode { font-family: var(--f-tricode); font-size: 25px; }
+  .best-of { font-family: var(--f-best-of); font-size: 23px; font-weight: 100; opacity: .85; justify-content: center; }
+  .pip { position: absolute; width: 10px; height: 10px; top: 28px; background: rgba(255, 255, 255, .4); }
+  .pip.gold { background: rgba(211, 160, 31, .4); }
+  .pip.won { background: #fff; }
+  .pip.gold.won { background: #d3a01f; }
+  .separator { left: 723px; top: 48px; width: 474px; height: 1px; background: #f2f2f2; opacity: .8; }
+  /* The map strip, and its way in (the title's storyboard). */
+  .map .bg { position: absolute; inset: 0; background: #14161f; opacity: .8; }
+  .map .label { position: absolute; left: 0; top: 4px; width: 224px; height: 16px; background: url("assets/title/map_labels.png") no-repeat; }
+  .map .info { font-family: var(--f-maps); font-size: 18.5px; left: 58px; top: 1px; width: 167px; height: 22px; }
+  .map .win { position: absolute; left: 180px; top: -11px; width: 40px; height: 40px; object-fit: contain; }
+  .map .current { position: absolute; left: 0; top: -2px; width: 224px; height: 2px; background: #fff; display: none; }
+  .map.is-current .current { display: block; }
+  #maps .bg { clip-path: inset(100% 0 0 0); }
+  #maps .label, #maps .info, #maps .win { opacity: 0; }
+  #maps .current { clip-path: inset(0 100% 0 0); }
+  #maps.in .bg { clip-path: inset(0 0 0 0); transition: clip-path .5s cubic-bezier(.55, .06, .68, .19) var(--d-bg); }
+  #maps.in .label, #maps.in .info, #maps.in .win { opacity: 1; transition: opacity .25s linear var(--d-text); }
+  #maps.in .current { clip-path: inset(0 0 0 0); transition: clip-path .3s cubic-bezier(.55, .06, .68, .19) 1.25s; }
 </style>
 </head>
 <body>
+<div id="title">
+  <div id="plates"></div>
+  <div id="score-title"></div>
+  <div id="maps"></div>
+</div>
 <script>
 (function () {
   "use strict";
@@ -221,6 +264,96 @@
     a.ctx.putImageData(a.image, 0, 0);
   }
 
+  // --- the title ---------------------------------------------------------------
+  var title = document.getElementById("title"), titleKey = null;
+  var MAP_X = [194, 434, 675, 916, 1157, 1398, 1639];
+  var BG_DELAY = [0.25, 0.35, 0.3, 0.55, 0.65, 0.75, 0.85], TEXT_DELAY = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1];
+  // Installed fonts first (on this PC, or sent by the app), then the bundled one.
+  var fontCss = document.createElement("style");
+  document.head.appendChild(fontCss);
+
+  function esc(text) {
+    return String(text == null ? "" : text).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+  function box(cls, x, y, w, h, inner, style) {
+    return '<div class="' + cls + '" style="left:' + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px;" + (style || "") + '">' + (inner || "") + "</div>";
+  }
+  function img(src, x, y, w, h, cls) {
+    return src ? '<img class="' + (cls || "logo") + '" src="' + esc(src) + '" style="left:' + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + 'px" alt="">' : "";
+  }
+  // Long text shrinks to fit its box.
+  function fit(root) {
+    Array.prototype.forEach.call(root.querySelectorAll(".text"), function (el) {
+      var span = el.firstChild;
+      if (!span || !span.style) return;
+      var size = parseFloat(getComputedStyle(el).fontSize);
+      span.style.fontSize = "";
+      while (span.scrollWidth > el.clientWidth && size > 8) { size -= 1; span.style.fontSize = size + "px"; }
+    });
+  }
+
+  function buildTitle() {
+    var m = look.match, f = look.fonts || {}, key = JSON.stringify([m, f, look.title]);
+    if (key === titleKey) return;
+    titleKey = key;
+    var css = "", vars = "";
+    ["name", "tricode", "record", "maps", "best_of"].forEach(function (role) {
+      var fam = (f[role] || "").replace(/["\\]/g, ""), slug = role.replace("_", "-");
+      if (fam) css += '@font-face { font-family: "SCC ' + role + '"; src: local("' + fam + '"), url("/fonts/local/' + encodeURIComponent(fam) + '"); }';
+      vars += "--f-" + slug + ': ' + (fam ? '"' + fam + '", "SCC ' + role + '", ' : "") + '"SCC fallback", sans-serif;';
+    });
+    fontCss.textContent = css + ":root {" + vars + "}";
+    var L = m.left || {}, R = m.right || {};
+    var span = function (t) { return "<span>" + esc(t) + "</span>"; };
+    // The name plates (over the HUD's team bars): logo at the outer end, name, record line.
+    document.getElementById("plates").innerHTML =
+      box("clip plate", 43, 17, 610, 51, img(L.logo, -7, -29, 168, 109)) +
+      box("clip plate", 1267, 17, 610, 51, img(R.logo, 447, -32, 173, 114)) +
+      box("text name", 191, 17, 456, 54, span(L.name), "justify-content:flex-end") +
+      box("text name", 1273, 16, 455, 54, span(R.name)) +
+      box("abs record-bg", 80, 68, 373, 29) + box("abs record-bg", 1304, 68, 373, 29) +
+      box("text record", 96, 69, 342, 29, span(L.record)) + box("text record", 1320, 69, 342, 29, span(R.record));
+    // The score box: logos, tricodes, the series score and how many it's best of.
+    var need = Math.min(5, Math.ceil((Number(m.best_of) || 1) / 2)), pips = "";
+    for (var k = 1; k <= need; k++) {
+      var cls = "pip" + (k === 5 ? " gold" : "");
+      pips += '<div class="' + cls + ((L.wins || 0) >= k ? " won" : "") + '" style="left:' + (894 - 17 * (k - 1)) + 'px"></div>';
+      pips += '<div class="' + cls + ((R.wins || 0) >= k ? " won" : "") + '" style="left:' + (1018 + 17 * (k - 1)) + 'px"></div>';
+    }
+    document.getElementById("score-title").innerHTML =
+      img(L.logo, 723, 53, 85, 98) + img(R.logo, 1111, 54, 85, 98) +
+      box("text tricode", 731, 17, 83, 35, span(L.tricode)) + box("text tricode", 1105, 17, 83, 35, span(R.tricode), "justify-content:flex-end") +
+      (look.title.best_of_text !== false ? box("text best-of", 891, 19, 139, 35, span("BEST OF " + m.best_of)) : "") +
+      pips + '<div class="abs separator"></div>';
+    // The maps of the series.
+    var maps = "", count = Math.max(0, Math.min(7, Number(m.map_count) || 0));
+    for (var i = 0; i < count; i++) {
+      var mp = (m.maps || [])[i] || {}, win = mp.winner === "left" ? L.logo : mp.winner === "right" ? R.logo : "";
+      maps += '<div class="clip map' + (i === Number(m.current_map) ? " is-current" : "") + '" style="left:' + MAP_X[i] +
+        "px;top:1056px;width:224px;height:24px;overflow:visible;--d-bg:" + BG_DELAY[i] + "s;--d-text:" + TEXT_DELAY[i] + 's">' +
+        '<div class="clip" style="inset:0">' + '<div class="bg"></div>' + img(win, 180, -11, 40, 40, "win") + "</div>" +
+        '<div class="label" style="background-position:' + (200 - MAP_X[i]) + 'px 0"></div>' +
+        box("text info", 58, 1, 167, 22, span(mp.name)) + '<div class="current"></div></div>';
+    }
+    document.getElementById("maps").innerHTML = maps;
+    fit(title);
+    if (document.fonts) document.fonts.ready.then(function () { fit(title); });
+  }
+
+  var mapsShown = false;
+  function showTitle() {
+    var t = look.title || {}, on = t.enabled !== false;
+    document.getElementById("plates").classList.toggle("on", on && t.plates !== false && state.hud === "on");
+    document.getElementById("score-title").classList.toggle("on", on && t.score_box !== false && state.hud !== "off");
+    var maps = document.getElementById("maps"), showMaps = on && t.maps !== false && state.hud === "on";
+    maps.classList.toggle("on", showMaps);
+    if (showMaps !== mapsShown) {
+      mapsShown = showMaps;
+      if (showMaps) { void maps.offsetWidth; maps.classList.add("in"); }   // (plays the way in)
+      else maps.classList.remove("in");
+    }
+  }
+
   // --- the reading from the app, and drawing it ---------------------------------
   var state = { hud: "off", rows: [], spectated: [], masks: {} }, look = null, lookVersion = 0;
 
@@ -257,6 +390,8 @@
           if (k2 !== sc.drawn) { drawScore(sc, l, r, s); sc.drawn = k2; }
         }
       }
+      buildTitle();
+      showTitle();
     }
     requestAnimationFrame(frame);
   }

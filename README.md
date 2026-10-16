@@ -9,6 +9,12 @@ CoD caster HUD:
 - **Score box**: the score box's background is recoloured with a gradient
   between the two teams' colours. The side of the team being spectated
   lights up.
+- **The title** (the BO7 In Game Scoreboard): each team's name plate, logo
+  and record line over the HUD's own team bars, the logos, tricodes and
+  series score in the score box, and the series' maps along the bottom.
+  Team names, logos, records, maps won and the map list are set in the
+  control panel; the fonts are any installed on the PC (Hitmarker, Dharma
+  Gothic E and Competition Solid by default, Bebas Neue when missing).
 - **Auto hide**: everything disappears when the CoD caster HUD goes off
   screen (killcams, menus, between maps), and comes back with it.
 
@@ -42,6 +48,8 @@ The game can run at any resolution: its picture is scaled to 1920×1080
 before it's read, and every position in the settings is in 1920×1080
 pixels. Click the preview in the control panel to read any pixel's
 position and colour.
+
+The app's icon is the skull: white on a dark taskbar, black on a light one.
 
 ## From source
 
