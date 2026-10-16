@@ -199,5 +199,18 @@ class ServerTests(unittest.TestCase):
                 app.stop()
 
 
+
+class PortTests(unittest.TestCase):
+    def test_old_port_moves_off_the_league_cam_port(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"http_port": 8779}, f)
+            self.assertEqual(Config(path).get()["http_port"], 8780)
+            with open(path, encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["http_port"], 8780)
+            self.assertEqual(DEFAULTS["http_port"], 8780)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -34,9 +34,10 @@ def _rows(xs, ys, **extra):
 
 
 DEFAULTS = {
-    # Not the League (8777) or VALORANT (8778) HUD's port, so all three can run at once.
+    # Not the League (8777, and 8779 for its player cams) or VALORANT (8778)
+    # HUD's port, so they can all run at once.
     "http_host": "127.0.0.1",
-    "http_port": 8779,
+    "http_port": 8780,
     # Let other PCs on the network load the overlay (vMix / OBS on another
     # PC). Settings can still only be changed on this PC.
     "allow_network": False,
@@ -173,6 +174,10 @@ class Config:
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 self.data = _merge(DEFAULTS, json.load(f))
+            # The first builds used 8779, which the League HUD's player cam page uses.
+            if self.data.get("http_port") == 8779:
+                self.data["http_port"] = 8780
+                self.save(self.data)
         self.version = 0
 
     def get(self):

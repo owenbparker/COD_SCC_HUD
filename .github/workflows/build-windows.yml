@@ -57,9 +57,12 @@ jobs:
           Remove-Item "$app\smoke-test.txt", "$app\config.json" -ErrorAction SilentlyContinue
           Remove-Item "$app\_update" -Recurse -ErrorAction SilentlyContinue
 
-      - name: Add readme
+      - name: Add readme and version.txt
         shell: pwsh
-        run: Copy-Item README.md dist\CodHUD\
+        run: |
+          Copy-Item README.md dist\CodHUD\
+          # (the SCC HUD Manager reads the installed version from it)
+          Set-Content dist\CodHUD\version.txt $env:VERSION -NoNewline
 
       - uses: actions/upload-artifact@v4
         with:

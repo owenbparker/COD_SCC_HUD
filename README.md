@@ -36,7 +36,7 @@ The app checks for updates when it starts and can update itself.
    the Call of Duty window by its title and reads it, even while other
    windows are on top of it. If the window can't be read, switch the **Game
    picture** setting to *Whole screen*.
-2. In vMix or OBS, add a **browser source** at `http://localhost:8779/overlay`,
+2. In vMix or OBS, add a **browser source** at `http://localhost:8780/overlay`,
    sized 1920×1080, and put it above the game feed.
    - If vMix or OBS runs on another PC, tick *Let other PCs on the network
      load the overlay* and use the network address shown in the control
