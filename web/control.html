@@ -114,6 +114,7 @@
   .log .error { color: #ff7b7b; }
   .warn { color: #ffcf66; }
 </style>
+<link rel="stylesheet" href="shell.css">
 </head>
 <body>
 <header>
@@ -128,7 +129,7 @@
 
 <div class="layout">
 <main>
-  <section class="wide">
+  <section class="wide" data-page="live overview">
     <h2>Right now</h2>
     <div class="readout">
       <span>Game</span><span id="r-source">–</span>
@@ -140,7 +141,7 @@
     <p class="note">Each row's glow is normal, <b class="warn">bright</b> (an objective icon), or dim (a skull). The spectated player's row is outlined.</p>
   </section>
 
-  <section class="wide">
+  <section class="wide" data-page="teams">
     <h2>Match</h2>
     <div class="teams">
       <div class="team" data-team="left" style="--tc: #AE2626"></div>
@@ -177,7 +178,7 @@
     </details>
   </section>
 
-  <section>
+  <section data-page="editor">
     <h2>Team colours <button class="reset" id="swap">Swap sides</button></h2>
     <div class="colours">
       <div><label>Left glow</label><div class="row" data-colour="highlights.color_left"></div></div>
@@ -188,7 +189,7 @@
     <p class="note">The left team is the scoreboard on the left of the CoD caster HUD.</p>
   </section>
 
-  <section>
+  <section data-page="editor">
     <h2>Name highlights <button class="reset" data-reset="highlights">Reset</button></h2>
     <label class="toggle"><input type="checkbox" data-k="highlights.enabled"> Glow around the player names</label>
     <label>Strength <span class="val"></span></label><input type="range" data-k="highlights.opacity" min="0" max="1" step="0.01">
@@ -229,7 +230,7 @@
     </details>
   </section>
 
-  <section>
+  <section data-page="editor">
     <h2>Score box <button class="reset" data-reset="scorebox">Reset</button></h2>
     <label class="toggle"><input type="checkbox" data-k="scorebox.enabled"> Recolour the score box with the teams' colours</label>
     <label>Strength <span class="val"></span></label><input type="range" data-k="scorebox.opacity" min="0" max="1" step="0.01">
@@ -253,7 +254,7 @@
     <label>Fade (seconds) <span class="val"></span></label><input type="range" data-k="scorebox.boost.fade" min="0" max="1" step="0.01">
   </section>
 
-  <section>
+  <section data-page="calibration">
     <h2>Auto hide <button class="reset" data-reset="detector">Reset</button></h2>
     <label class="toggle"><input type="checkbox" data-k="detector.enabled"> Only show while the CoD caster HUD is on screen</label>
     <p class="note">Told by two pixels of the CoD caster HUD: one in the score box and one in the right team's scoreboard. Click the preview to read any pixel.</p>
@@ -268,7 +269,7 @@
     <label class="toggle"><input type="checkbox" data-k="detector.score_box_only"> Score box up without the scoreboards: keep the score box overlay</label>
   </section>
 
-  <section>
+  <section data-page="overview">
     <h2>Game picture</h2>
     <div class="seg" id="capture-mode"><button data-mode="window">Call of Duty window</button><button data-mode="screen">Whole screen</button></div>
     <label>Window title contains</label><input type="text" data-k="capture.window_title">
@@ -277,7 +278,7 @@
     <p class="note">The window is read even while other windows cover it. Use whole screen if the window can't be read (the game must then be visible on that screen).</p>
   </section>
 
-  <section class="wide">
+  <section class="wide" data-page="calibration">
     <h2>Calibration <button class="reset" id="reset-cal">Reset all</button></h2>
     <p class="note" style="margin-top:0">Positions are in 1920×1080 pixels, whatever resolution the game runs at. The defaults match the CoD caster HUD; you only need these if it moves.</p>
     <div class="row" style="margin: 10px 0">
@@ -311,7 +312,7 @@
 </main>
 
 <aside>
-  <section>
+  <section data-page="editor live calibration">
     <h2>Preview</h2>
     <div class="preview" id="preview">
       <img id="frame" alt="">
@@ -321,7 +322,7 @@
     </div>
     <div class="picked" id="picked"><span class="note" style="margin:0">Click the preview to read a pixel's position and colour.</span></div>
   </section>
-  <section>
+  <section data-page="overview">
     <h2>Browser source</h2>
     <div class="out"><span>Add as a browser source (1920×1080) in vMix or OBS:</span>
       <div class="row"><code id="url-local"></code><button data-copy="url-local">Copy</button></div></div>
@@ -330,13 +331,15 @@
     <label class="toggle"><input type="checkbox" id="network"> Let other PCs on the network load the overlay</label>
     <p class="note">Lay it over the game feed. It draws on the CoD caster HUD only and hides when the HUD goes away.</p>
   </section>
-  <section>
+  <section data-page="overview">
     <h2>Log</h2>
     <div class="log" id="log"></div>
   </section>
 </aside>
 </div>
 
+<script>window.SHELL = {"app": "CoD HUD", "logo": "assets/logo-white.png", "pages": [{"id": "overview", "label": "Overview"}, {"id": "editor", "label": "HUD Editor"}, {"id": "teams", "label": "Match & Teams", "group": "Event setup"}, {"id": "live", "label": "Live Game", "group": "Live game"}, {"id": "calibration", "label": "Calibration", "icon": "settings", "group": "Live game"}]};</script>
+<script src="shell.js"></script>
 <script src="update.js"></script>
 <script>
 (function () {
