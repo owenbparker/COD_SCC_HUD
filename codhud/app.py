@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from . import detect, fonts
 from .config import DATA_DIR, DEFAULTS, LOGO_DIR, WEB_DIR, from_suite
+from .enginelink import EngineLink, save_logo_bytes
 from .log import log, since
 from .scanner import Hub, Scanner
 from .updater import Updater, clean_up_old_update
@@ -31,9 +32,14 @@ class HudApp:
         self.updater = Updater()
         self.server = None
         self._config_version = config.version
+        # The SCC GFX Engine: the match and series go to it; its teams can come here.
+        self.engine = EngineLink("CoD HUD", "cod", self._engine_snapshot, self._engine_apply_global,
+                                 load=lambda: self.config.get().get("gfx_engine"),
+                                 save=lambda d: self.config.update({"gfx_engine": d}), log=log)
 
     def stop(self):
         self.scanner.stop()
+        self.engine.stop()
         if self.server:
             self.server.stop()
 
@@ -86,6 +92,64 @@ class HudApp:
             f.write(base64.b64decode(m.group(2)))
         log(f"Added the logo {stem}{ext}")
         return "logos/" + stem + ext
+
+    def _engine_snapshot(self):
+        """What the GFX Engine gets: the match as flat fields, and the series."""
+        cfg = self.config.get()
+        match, hl = cfg["match"], cfg["highlights"]
+        fields = {}
+        for side in ("left", "right"):
+            t = match[side]
+            fields.update({f"{side}_name": t.get("name") or "", f"{side}_short": t.get("tricode") or "",
+                           f"{side}_record": t.get("record") or "", f"{side}_wins": int(t.get("wins") or 0),
+                           f"{side}_logo": t.get("logo") or "", f"{side}_color": hl.get(f"color_{side}") or ""})
+        maps = match.get("maps") or []
+        count = max(0, min(int(match.get("map_count") or len(maps)), len(maps)))
+        current = int(match.get("current_map") or 0)
+        fields.update({"best_of": int(match.get("best_of") or 0), "map_count": count, "map_number": current + 1})
+        for i, m in enumerate(maps[:count]):
+            name, _, mode = (m.get("name") or "").partition("//")
+            winner = m.get("winner") or ""
+            fields.update({f"map{i + 1}_name": name.strip(), f"map{i + 1}_mode": mode.strip(),
+                           f"map{i + 1}_winner": (match[winner].get("tricode") or match[winner].get("name") or "") if winner in ("left", "right") else ""})
+        fields["map_name"] = fields.get(f"map{current + 1}_name", "")
+        fields["map_mode"] = fields.get(f"map{current + 1}_mode", "")
+        state = self.hub.state
+        spec = [i for i, on in enumerate(state.get("spectated") or []) if on]
+        fields.update({"hud": state.get("hud") or "off",
+                       "spectated_row": spec[0] + 1 if spec else 0,
+                       "spectated_side": ("left" if spec[0] < 4 else "right") if spec else ""})
+        series = {side: {"name": match[side].get("name") or "", "short": match[side].get("tricode") or "",
+                         "score": int(match[side].get("wins") or 0), "color": hl.get(f"color_{side}") or ""}
+                  for side in ("left", "right")}
+        series["best_of"] = int(match.get("best_of") or 0)
+        return {"fields": fields, "series": series}
+
+    def _engine_apply_global(self, g, fetch):
+        """The GFX Engine's teams (names, short names, logos) into the HUD."""
+        changes, done = {}, []
+        for side in ("left", "right"):
+            t = g.get(side) or {}
+            team = {}
+            if t.get("name"):
+                team["name"] = t["name"]
+            if t.get("short"):
+                team["tricode"] = t["short"][:6]
+            if t.get("logo_url"):
+                try:
+                    blob = fetch(t["logo_url"])
+                    name = save_logo_bytes(LOGO_DIR, f"engine-{t.get('short') or t.get('name') or side}", blob)
+                    team["logo"] = f"logos/{name}"
+                except Exception as e:
+                    log(f"Couldn't fetch the {side} logo from the GFX Engine: {e}", "warn")
+            if team:
+                changes[side] = team
+                done.append(f"{side}: {team.get('name') or team.get('tricode') or 'logo'}")
+        if not changes:
+            raise ValueError("The engine's Global configuration has no team names or logos yet")
+        self.config.update({"match": changes})
+        self.changed_config()
+        return ", ".join(done)
 
     def frame_jpeg(self, width=960):
         frame = self.scanner.frame
@@ -216,6 +280,8 @@ def make_handler(app):
                 self._stream()
             elif path == "/api/state":
                 self._json(app.info())
+            elif path == "/api/engine":
+                self._json(app.engine.status())
             elif path == "/api/log":
                 self._json({"lines": since(int((query.get("after") or ["0"])[0]))})
             elif path == "/api/frame.jpg":
@@ -242,6 +308,12 @@ def make_handler(app):
                 length = int(self.headers.get("Content-Length") or 0)
                 body = json.loads(self.rfile.read(length) or b"{}")
                 path = urlparse(self.path).path
+                if path.startswith("/api/engine/"):
+                    # Connect to GFX Engine (see enginelink.py).
+                    reply = app.engine.handle("POST", path, body)
+                    if reply is None:
+                        return self._json({"error": "not found"}, 404)
+                    return self._json(reply)
                 if path == "/api/config":
                     # {"path": "highlights.opacity", "value": 0.3} or {"changes": {...}}
                     if "path" in body:

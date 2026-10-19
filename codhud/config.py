@@ -137,6 +137,8 @@ DEFAULTS = {
     # shows them on any PC); Bebas Neue when one isn't installed.
     "fonts": {"name": "Hitmarker", "tricode": "Hitmarker Normal", "record": "Dharma Gothic E",
               "maps": "Dharma Gothic E", "best_of": "Competition Solid"},
+    # The SCC GFX Engine this HUD sends its match and series to (see codhud/enginelink.py).
+    "gfx_engine": {"url": "", "name": "", "connected": False},
 }
 
 _lock = threading.Lock()

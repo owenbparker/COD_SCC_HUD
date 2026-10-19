@@ -200,6 +200,110 @@ class ServerTests(unittest.TestCase):
 
 
 
+class EngineLinkTests(unittest.TestCase):
+    def test_connect_send_and_use_global(self):
+        """A fake SCC GFX Engine: the HUD connects, sends its match and series,
+        and takes the engine's team names, short names and logos."""
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import codhud.app as appmod
+        from codhud.app import HudApp, start
+
+        png = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+                            "1f15c4890000000d49444154789c63f8cf000000030101005a4d5b3c0000000049454e44ae426082")
+        ingests = []
+
+        class Engine(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def _send(self, body, ctype="application/json"):
+                body = body if isinstance(body, bytes) else json.dumps(body).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_GET(self):
+                port = self.server.server_address[1]
+                if self.path == "/api/hello":
+                    self._send({"app": "scc-gfx-engine", "name": "Test"})
+                elif self.path == "/api/global":
+                    self._send({"global": {
+                        "left": {"name": "OPTIC TEXAS", "short": "OPTX", "logo_url": f"http://127.0.0.1:{port}/logo.png"},
+                        "right": {"name": "ATLANTA FAZE", "short": "ATL"}}})
+                elif self.path == "/logo.png":
+                    self._send(png, "image/png")
+                else:
+                    self.send_error(404)
+
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                if self.path == "/api/ingest":
+                    ingests.append(json.loads(body))
+                    self._send({"ok": True, "global": {}})
+                else:
+                    self.send_error(404)
+
+        engine = ThreadingHTTPServer(("127.0.0.1", 0), Engine)
+        engine.daemon_threads = True
+        threading.Thread(target=engine.serve_forever, daemon=True).start()
+        with tempfile.TemporaryDirectory() as tmp:
+            old = appmod.LOGO_DIR
+            appmod.LOGO_DIR = os.path.join(tmp, "logos")
+            cfg = Config(os.path.join(tmp, "config.json"))
+            cfg.update({"http_port": 8796})
+            app = HudApp(cfg, demo=True)
+            app.updater.check_in_background = lambda: None
+            start(app)
+            base = "http://127.0.0.1:8796"
+            try:
+                def post(path, body=None):
+                    req = urllib.request.Request(base + path, json.dumps(body or {}).encode(), {"Content-Type": "application/json"})
+                    return json.loads(urllib.request.urlopen(req, timeout=10).read())
+
+                self.assertFalse(json.loads(urllib.request.urlopen(base + "/api/engine", timeout=5).read())["connected"])
+                self.assertEqual(urllib.request.urlopen(base + "/enginelink.js", timeout=5).status, 200)
+                got = post("/api/engine/connect", {"url": f"127.0.0.1:{engine.server_address[1]}"})
+                self.assertTrue(got["connected"])
+                self.assertEqual(got["name"], "Test")
+                self.assertTrue(cfg.get()["gfx_engine"]["connected"])
+                deadline = time.time() + 10
+                while time.time() < deadline and not ingests:
+                    time.sleep(0.05)
+                self.assertTrue(ingests, "the HUD sent nothing to the engine")
+                sent = ingests[-1]
+                self.assertEqual((sent["source"], sent["game"]), ("CoD HUD", "cod"))
+                self.assertEqual(sent["series"]["left"]["short"], "FUEL")
+                self.assertEqual(sent["series"]["right"]["name"], "ST. CLAIR SAINTS")
+                self.assertEqual(sent["series"]["best_of"], 5)
+                self.assertEqual(sent["fields"]["left_name"], "FUEL ESPORTS")
+                self.assertEqual(sent["fields"]["map_name"], "COLOSSUS")
+                self.assertEqual(sent["fields"]["map_mode"], "HARDPOINT")
+
+                reply = post("/api/engine/use-global")
+                self.assertIn("OPTIC TEXAS", reply["summary"])
+                match = cfg.get()["match"]
+                self.assertEqual((match["left"]["name"], match["left"]["tricode"]), ("OPTIC TEXAS", "OPTX"))
+                self.assertEqual((match["right"]["name"], match["right"]["tricode"]), ("ATLANTA FAZE", "ATL"))
+                self.assertEqual(match["left"]["logo"], "logos/engine-OPTX.png")
+                self.assertEqual(match["right"]["logo"], "assets/logos/st-clair-saints.png")
+                with open(os.path.join(tmp, "logos", "engine-OPTX.png"), "rb") as f:
+                    self.assertEqual(f.read(), png)
+                self.assertEqual(urllib.request.urlopen(base + "/logos/engine-OPTX.png", timeout=5).read(), png)
+                with self.assertRaises(urllib.error.HTTPError) as e:
+                    post("/api/engine/nope")
+                self.assertEqual(e.exception.code, 404)
+                post("/api/engine/disconnect")
+                self.assertFalse(cfg.get()["gfx_engine"]["connected"])
+            finally:
+                app.stop()
+                appmod.LOGO_DIR = old
+                engine.shutdown()
+                engine.server_close()
+
+
 class PortTests(unittest.TestCase):
     def test_old_port_moves_off_the_league_cam_port(self):
         with tempfile.TemporaryDirectory() as tmp:

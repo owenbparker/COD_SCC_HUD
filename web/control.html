@@ -338,7 +338,8 @@
 </aside>
 </div>
 
-<script>window.SHELL = {"app": "CoD HUD", "logo": "assets/logo-white.png", "pages": [{"id": "overview", "label": "Overview"}, {"id": "editor", "label": "HUD Editor"}, {"id": "teams", "label": "Match & Teams", "group": "Event setup"}, {"id": "live", "label": "Live Game", "group": "Live game"}, {"id": "calibration", "label": "Calibration", "icon": "settings", "group": "Live game"}]};</script>
+<script>window.SHELL = {"app": "CoD HUD", "logo": "assets/logo-white.png", "pages": [{"id": "overview", "label": "Overview"}, {"id": "editor", "label": "HUD Editor"}, {"id": "teams", "label": "Match & Teams", "group": "Event setup"}, {"id": "live", "label": "Live Game", "group": "Live game"}, {"id": "calibration", "label": "Calibration", "icon": "settings", "group": "Live game"}, {"id": "engine", "label": "GFX Engine", "icon": "engine", "group": "Connections"}]};</script>
+<script src="enginelink.js"></script>
 <script src="shell.js"></script>
 <script src="update.js"></script>
 <script>
@@ -613,6 +614,8 @@
       info = d; cfg = d.config; buildLists(); fillFields(document); renderInfo(); renderTeams(); renderMaps();
     });
   }
+  // After "Use Global Information" on the GFX Engine page: the new team names and logos.
+  window.onEngineGlobal = function () { loadLogos(); reloadConfig(); };
 
   // --- preview: the game picture with the overlay on top --------------------------
   var preview = $("#preview"), frameImg = $("#frame"), picked = null;
