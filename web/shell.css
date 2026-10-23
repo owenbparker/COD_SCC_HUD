@@ -59,3 +59,10 @@ body.shell main > section:has(.preview):not(.wide) { grid-column: span 2; }
   body.shell main { padding: 14px; grid-template-columns: 1fr; }
   body.shell main > section:has(.preview):not(.wide) { grid-column: auto; }
 }
+
+/* Dark scroll bars (WebView2 otherwise draws the light Windows ones). */
+::-webkit-scrollbar { width: 12px; height: 12px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3a3d44; border: 3px solid transparent; border-radius: 8px; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #50545c; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-button { display: none; }
