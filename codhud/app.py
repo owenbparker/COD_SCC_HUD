@@ -53,6 +53,23 @@ class HudApp:
             self.server.restart(self.host())
         log("Other PCs on your network can now load the overlay" if enabled else "The overlay is now only reachable from this PC")
 
+    def swap_sides(self):
+        """The teams change sides: their name plates, logos, records and series
+        wins, the maps they've won and their colours."""
+        cfg = self.config.get()
+        m, h, s = cfg["match"], cfg["highlights"], cfg["scorebox"]
+        b = s["boost"]
+        flip = {"left": "right", "right": "left"}
+        self.config.update({
+            "match": {"left": m["right"], "right": m["left"],
+                      "maps": [dict(x, winner=flip.get(x.get("winner"), x.get("winner") or "")) for x in m["maps"]]},
+            "highlights": {"color_left": h["color_right"], "color_right": h["color_left"]},
+            "scorebox": {"color_left": s["color_right"], "color_right": s["color_left"],
+                         "boost": {"opacity_left": b["opacity_right"], "opacity_right": b["opacity_left"],
+                                   "lightness_left": b["lightness_right"], "lightness_right": b["lightness_left"]}}})
+        log(f"Sides swapped: {m['right']['name'] or 'right team'} on the left")
+        self.changed_config()
+
     def changed_config(self):
         """Settings changed: the overlay pages pick up the new look."""
         self.hub.touch()
@@ -321,6 +338,8 @@ def make_handler(app):
                     else:
                         app.config.update(body.get("changes") or {})
                     app.changed_config()
+                elif path == "/api/swap":
+                    app.swap_sides()
                 elif path == "/api/reset":
                     section = body.get("section")
                     if section not in DEFAULTS or not isinstance(DEFAULTS[section], dict):

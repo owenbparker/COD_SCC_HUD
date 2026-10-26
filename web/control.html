@@ -142,7 +142,7 @@
   </section>
 
   <section class="wide" data-page="teams">
-    <h2>Match</h2>
+    <h2>Match <button class="reset" id="swap-sides" title="The teams change sides: names, logos, records, series wins, maps won and colours">⇄ Swap sides</button></h2>
     <div class="teams">
       <div class="team" data-team="left" style="--tc: #AE2626"></div>
       <div class="team" data-team="right" style="--tc: #771116"></div>
@@ -179,7 +179,7 @@
   </section>
 
   <section data-page="editor">
-    <h2>Team colours <button class="reset" id="swap">Swap sides</button></h2>
+    <h2>Team colours <button class="reset" id="swap" title="Only the colours change sides (Match &amp; Teams' Swap sides moves the teams too)">Swap colours</button></h2>
     <div class="colours">
       <div><label>Left glow</label><div class="row" data-colour="highlights.color_left"></div></div>
       <div><label>Right glow</label><div class="row" data-colour="highlights.color_right"></div></div>
@@ -677,6 +677,7 @@
                            lightness_left: s.boost.lightness_right, lightness_right: s.boost.lightness_left } } } })
       .then(reloadConfig);
   };
+  $("#swap-sides").onclick = function () { post("/api/swap", {}).then(reloadConfig); };
   $("#import-btn").onclick = function () { $("#import-file").click(); };
   $("#import-file").onchange = function () {
     var file = this.files[0];

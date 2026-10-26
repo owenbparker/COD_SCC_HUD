@@ -175,6 +175,15 @@ class ServerTests(unittest.TestCase):
                     post("/api/import", json.load(f))
                 self.assertEqual(cfg.get()["highlights"]["opacity"], 0.25)
                 post("/api/reset", {"section": "scorebox"})
+                # Swap sides: the teams, their maps won and their colours.
+                post("/api/config", {"changes": {"match": {"left": {"name": "FUEL", "wins": 2}, "right": {"name": "SAINTS"},
+                                                           "maps": [{"name": "A", "winner": "left"}, {"name": "B", "winner": ""}]},
+                                                 "highlights": {"color_left": "#111111", "color_right": "#222222"}}})
+                c = post("/api/swap", {})["config"]
+                self.assertEqual((c["match"]["left"]["name"], c["match"]["right"]["name"], c["match"]["right"]["wins"]),
+                                 ("SAINTS", "FUEL", 2))
+                self.assertEqual([x["winner"] for x in c["match"]["maps"][:2]], ["right", ""])
+                self.assertEqual((c["highlights"]["color_left"], c["highlights"]["color_right"]), ("#222222", "#111111"))
                 with self.assertRaises(urllib.error.HTTPError):
                     post("/api/reset", {"section": "nope"})
                 self.assertIn("assets/logos/st-clair-saints.png", json.loads(urllib.request.urlopen(base + "/api/logos").read())["logos"])
