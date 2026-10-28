@@ -1,27 +1,30 @@
 # SCC CoD HUD
 
 An overlay for Call of Duty broadcasts that sits on top of the game's own
-CoD caster HUD:
+CoD caster HUD, laid out as on CDL broadcasts:
 
-- **Name highlights**: a glow in each scoreboard row, around the player's
-  name, in their team's colour. It brightens while the player is on the
-  objective and dims while they're dead.
-- **Score box**: the score box's background is recoloured with a gradient
-  between the two teams' colours. The side of the team being spectated
-  lights up.
-- **The title** (the BO7 In Game Scoreboard): each team's name plate, logo
-  and record line over the HUD's own team bars, the logos, tricodes and
-  series score in the score box, and the series' maps along the bottom.
-  Team names, logos, records, maps won and the map list are set in the
-  control panel; the fonts are any installed on the PC (Hitmarker, Dharma
-  Gothic E and Competition Solid by default, Bebas Neue when missing).
+- **Name plates** over the HUD's team bars: each team's name, with a strip
+  of its logo at the outer end (the NEW COD OVERLAY vMix title).
+- **Score box**: the teams' logos over the game's, and the series score in
+  place of the game's pips (with "BEST OF n").
+- **Webcam**: the spectated player's cam, left of the game's player card.
+  Players connect their webcams with the SCC Player Cam app (Call of Duty
+  mode, with their in-game name).
+- **Sponsors**, one after another, under the middle of the screen.
 - **Auto hide**: everything disappears when the CoD caster HUD goes off
   screen (killcams, menus, between maps), and comes back with it.
 
-Only the HUD's background is painted, so its names, numbers and icons show
-through untouched. The look and the screen positions come from the CoD
-Scoreboard Suite, and its settings file can be imported from the control
-panel.
+The teams, logos, colours, series score and sponsors follow the SCC GFX
+Engine's Global information (GFX Engine page). **Swap sides** (Match &
+Teams) swaps the teams' names, logos, colours and series scores, in the
+engine too.
+
+The players' in-game names are read off the scoreboards (Windows text
+recognition). On the **Players** page, *Save IGN to player* links each name
+to their player in the GFX Engine's team roster, as in the VALORANT HUD.
+The webcam shown is the cam of the player whose row is highlighted (or
+whose name is on the player card): matched by their in-game name, the
+roster player it's linked to, or a cam picked by hand on the Webcams page.
 
 ## Install
 
@@ -38,11 +41,12 @@ The app checks for updates when it starts and can update itself.
    picture** setting to *Whole screen*.
 2. In vMix or OBS, add a **browser source** at `http://localhost:8780/overlay`,
    sized 1920×1080, and put it above the game feed.
-   - If vMix or OBS runs on another PC, tick *Let other PCs on the network
-     load the overlay* and use the network address shown in the control
-     panel.
-3. Set the teams' colours in the control panel. **Demo** plays a made-up
-   match, so you can set up the look without the game running.
+   - If vMix or OBS runs on another PC, or players connect webcams, tick
+     *Let other PCs on the network load the overlay and connect their
+     cams* and use the network address shown in the control panel.
+3. Connect to the GFX Engine (GFX Engine page) for the teams and sponsors.
+   **Demo** plays the CoD caster HUD screenshot, so you can see the look
+   without the game running.
 
 The game can run at any resolution: its picture is scaled to 1920×1080
 before it's read, and every position in the settings is in 1920×1080

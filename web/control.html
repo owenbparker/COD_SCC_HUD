@@ -78,12 +78,6 @@
   .out .row { align-items: stretch; }
   .out code { display: flex; align-items: center; padding: 6px 8px; }
   .out button { flex: 0 0 auto; }
-  .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .chip { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
-  .chip b { color: var(--text); font-weight: 600; }
-  .chip.bright b { color: #ffcf66; }
-  .chip.dim b { color: #8b939b; }
-  .chip.spec { border-color: var(--accent); }
   .readout { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
   .readout span:nth-child(odd) { color: var(--muted); }
   .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); vertical-align: -2px; margin-right: 4px; }
@@ -113,6 +107,23 @@
   .log .warn { color: #ffcf66; }
   .log .error { color: #ff7b7b; }
   .warn { color: #ffcf66; }
+  .players { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .players { grid-template-columns: 1fr; } }
+  .pteam { border-top: 4px solid var(--tc, #555); padding-top: 8px; }
+  .pteam h3 { margin: 0 0 6px; font-size: 13px; color: var(--text); }
+  .prow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 190px; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .prow b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prow b.none { color: var(--muted); font-weight: 400; }
+  .prow select { padding: 5px 8px; margin: 0; }
+  .prow .n { color: var(--muted); font-size: 12px; text-align: right; }
+  .prow.spec b { color: var(--accent); }
+  .linked { color: #3ecf6e; font-size: 12px; white-space: nowrap; }
+  .unlinked { color: #ff5a5a; font-size: 12px; white-space: nowrap; }
+  .camlist .c { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .camlist .c span { color: var(--muted); font-size: 12px; }
+  .swatch-row { display: flex; gap: 8px; align-items: center; }
+  .sponsor-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .sponsor-strip img { width: 96px; height: 44px; object-fit: contain; background: #2e2c2a; border-radius: 4px; padding: 4px; }
 </style>
 <link rel="stylesheet" href="shell.css">
 </head>
@@ -129,129 +140,73 @@
 
 <div class="layout">
 <main>
-  <section class="wide" data-page="live overview">
+  <section class="wide" data-page="overview live">
     <h2>Right now</h2>
     <div class="readout">
       <span>Game</span><span id="r-source">–</span>
       <span>CoD caster HUD</span><span id="r-hud">–</span>
+      <span>Spectating</span><span id="r-spec">–</span>
+      <span>Player names</span><span id="r-names">–</span>
+      <span>Webcams</span><span id="r-cams">–</span>
       <span>Auto hide pixels</span><span id="r-pixels">–</span>
     </div>
-    <h3>Scoreboard rows (glow)</h3>
-    <div class="chips" id="chips"></div>
-    <p class="note">Each row's glow is normal, <b class="warn">bright</b> (an objective icon), or dim (a skull). The spectated player's row is outlined.</p>
   </section>
 
   <section class="wide" data-page="teams">
-    <h2>Match <button class="reset" id="swap-sides" title="The teams change sides: names, logos, records, series wins, maps won and colours">⇄ Swap sides</button></h2>
+    <h2>Match <button class="reset" id="swap-sides" title="The teams change sides: names, short names, logos, colours and series scores (in the GFX Engine's Global information too)">⇄ Swap sides</button></h2>
+    <label class="toggle"><input type="checkbox" data-k="global.follow"> Follow the GFX Engine's Global information (teams, logos, series score, sponsors)</label>
+    <p class="note" id="follow-note"></p>
     <div class="teams">
-      <div class="team" data-team="left" style="--tc: #AE2626"></div>
-      <div class="team" data-team="right" style="--tc: #771116"></div>
+      <div class="team" data-team="left"></div>
+      <div class="team" data-team="right"></div>
     </div>
     <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
     <div class="two" style="margin-top: 6px">
-      <div><label>Series</label><select data-k="match.best_of" data-num="1">
+      <div><label>Series</label><select id="best-of">
         <option value="1">Best of 1</option><option value="3">Best of 3</option><option value="5">Best of 5</option>
         <option value="7">Best of 7</option><option value="9">Best of 9</option></select></div>
-      <div><label>Maps in the strip</label><select data-k="match.map_count" data-num="1">
-        <option value="0">None</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
-        <option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select></div>
+      <div><label>Team names' font</label><select class="font" data-k="fonts.name"></select></div>
     </div>
-    <h3>Maps (the strip along the bottom)</h3>
-    <div class="maps-list" id="maps-list"></div>
-    <h3>Show</h3>
+  </section>
+
+  <section class="wide" data-page="teams editor">
+    <h2>Show on the overlay</h2>
     <div class="row" style="flex-wrap: wrap">
-      <label class="toggle"><input type="checkbox" data-k="title.enabled"> The title</label>
-      <label class="toggle"><input type="checkbox" data-k="title.plates"> Name plates</label>
-      <label class="toggle"><input type="checkbox" data-k="title.score_box"> Score box logos &amp; series</label>
-      <label class="toggle"><input type="checkbox" data-k="title.best_of_text"> "Best of" text</label>
-      <label class="toggle"><input type="checkbox" data-k="title.maps"> Map strip</label>
+      <label class="toggle"><input type="checkbox" data-k="overlay.plates"> Name plates</label>
+      <label class="toggle"><input type="checkbox" data-k="overlay.logos"> Score box logos</label>
+      <label class="toggle"><input type="checkbox" data-k="overlay.pips"> Series score</label>
+      <label class="toggle"><input type="checkbox" data-k="overlay.cam"> Webcam</label>
+      <label class="toggle"><input type="checkbox" data-k="overlay.sponsor"> Sponsors</label>
     </div>
-    <details><summary>Fonts</summary>
-      <p class="note">Fonts installed on this PC; the overlay gets them from here, so they show in vMix / OBS on any PC. Bebas Neue is used when a font isn't installed.</p>
-      <div class="two">
-        <div><label>Team names</label><select class="font" data-k="fonts.name"></select></div>
-        <div><label>Tricodes</label><select class="font" data-k="fonts.tricode"></select></div>
-        <div><label>Record lines</label><select class="font" data-k="fonts.record"></select></div>
-        <div><label>Maps</label><select class="font" data-k="fonts.maps"></select></div>
-        <div><label>"Best of"</label><select class="font" data-k="fonts.best_of"></select></div>
-      </div>
-    </details>
+    <h3>Sponsors</h3>
+    <div class="sponsor-strip" id="sponsors"></div>
+    <p class="note">The sponsors come from the GFX Engine's Global information (Global &gt; Sponsors), one after another for their seconds, in CDL's place under the middle of the screen.</p>
   </section>
 
-  <section data-page="editor">
-    <h2>Team colours <button class="reset" id="swap" title="Only the colours change sides (Match &amp; Teams' Swap sides moves the teams too)">Swap colours</button></h2>
-    <div class="colours">
-      <div><label>Left glow</label><div class="row" data-colour="highlights.color_left"></div></div>
-      <div><label>Right glow</label><div class="row" data-colour="highlights.color_right"></div></div>
-      <div><label>Score box left</label><div class="row" data-colour="scorebox.color_left"></div></div>
-      <div><label>Score box right</label><div class="row" data-colour="scorebox.color_right"></div></div>
-    </div>
-    <p class="note">The left team is the scoreboard on the left of the CoD caster HUD.</p>
+  <section class="wide" data-page="players">
+    <h2>Players <button class="reset" id="names-clear" title="Forget the names read and read them again from the scoreboards">Read names again</button></h2>
+    <p class="note" style="margin-top:0">The in-game names are read off the scoreboards while the CoD caster HUD is up. "Save IGN to player" links each one to their player in the GFX Engine's team roster (as in the VALORANT HUD), so the engine's graphics and the webcams know who they are.</p>
+    <div class="players" id="players"></div>
+    <p class="note" id="players-note"></p>
   </section>
 
-  <section data-page="editor">
-    <h2>Name highlights <button class="reset" data-reset="highlights">Reset</button></h2>
-    <label class="toggle"><input type="checkbox" data-k="highlights.enabled"> Glow around the player names</label>
-    <label>Strength <span class="val"></span></label><input type="range" data-k="highlights.opacity" min="0" max="1" step="0.01">
-    <div class="two">
-      <div><label>Middle opacity % <span class="val"></span></label><input type="range" data-k="highlights.center_opacity" min="0" max="100" step="1"></div>
-      <div><label>Edge opacity % <span class="val"></span></label><input type="range" data-k="highlights.edge_opacity" min="0" max="100" step="1"></div>
-      <div><label>Edge lightness <span class="val"></span></label><input type="range" data-k="highlights.edge_brighten" min="0" max="100" step="1"></div>
-      <div><label>Edge saturation <span class="val"></span></label><input type="range" data-k="highlights.edge_saturation" min="-100" max="100" step="1"></div>
-      <div><label>Glow reach % <span class="val"></span></label><input type="range" data-k="highlights.reach" min="5" max="100" step="1"></div>
-      <div><label>Steepness <span class="val"></span></label><input type="range" data-k="highlights.falloff" min="0.1" max="8" step="0.1"></div>
-    </div>
-    <h3>On the objective (brighter)</h3>
-    <div class="two">
-      <div><label>Opacity + % <span class="val"></span></label><input type="range" data-k="highlights.bright_opacity" min="0" max="300" step="1"></div>
-      <div><label>Lightness + <span class="val"></span></label><input type="range" data-k="highlights.bright_lightness" min="0" max="60" step="1"></div>
-    </div>
-    <h3>Dead (dimmer)</h3>
-    <div class="two">
-      <div><label>Opacity − % <span class="val"></span></label><input type="range" data-k="highlights.dim_opacity" min="0" max="100" step="1"></div>
-      <div><label>Lightness − <span class="val"></span></label><input type="range" data-k="highlights.dim_lightness" min="0" max="60" step="1"></div>
-    </div>
-    <label>Fade (seconds) <span class="val"></span></label><input type="range" data-k="highlights.fade" min="0" max="1" step="0.01">
-    <details><summary>More glow shape</summary>
-      <div class="two">
-        <div><label>Edge hue turn <span class="val"></span></label><input type="range" data-k="highlights.edge_hue" min="-180" max="180" step="1"></div>
-        <div><label>Dark middle % <span class="val"></span></label><input type="range" data-k="highlights.core" min="0" max="95" step="1"></div>
-        <div><label>Oval blend % <span class="val"></span></label><input type="range" data-k="highlights.oval" min="0" max="100" step="1"></div>
-        <div><label>Side depth % <span class="val"></span></label><input type="range" data-k="highlights.side_depth" min="5" max="300" step="1"></div>
-        <div><label>Corner radius <span class="val"></span></label><input type="range" data-k="highlights.corner" min="0" max="16" step="1"></div>
-      </div>
-      <label>Lit edges</label>
-      <div class="row">
-        <label class="toggle"><input type="checkbox" data-k="highlights.edges.top"> Top</label>
-        <label class="toggle"><input type="checkbox" data-k="highlights.edges.bottom"> Bottom</label>
-        <label class="toggle"><input type="checkbox" data-k="highlights.edges.left"> Left</label>
-        <label class="toggle"><input type="checkbox" data-k="highlights.edges.right"> Right</label>
-      </div>
-    </details>
+  <section class="wide" data-page="cams">
+    <h2>Webcams</h2>
+    <label class="toggle"><input type="checkbox" data-k="cams.enabled"> Show the spectated player's webcam</label>
+    <label class="toggle"><input type="checkbox" id="network-cams"> Let other PCs on the network connect (needed for player cams)</label>
+    <p class="note">Each player runs the SCC Player Cam app on their PC, picks Call of Duty, connects to this PC and types their in-game name. Their cam shows, left of the player card, while the observer spectates them. A cam is matched by the name read off the scoreboard (or the roster player it's linked to); pick one by hand below if a name doesn't match.</p>
+    <h3>Connected cams</h3>
+    <div class="camlist" id="camlist"></div>
+    <h3>Players' cams</h3>
+    <div class="players" id="cam-players"></div>
   </section>
 
-  <section data-page="editor">
-    <h2>Score box <button class="reset" data-reset="scorebox">Reset</button></h2>
-    <label class="toggle"><input type="checkbox" data-k="scorebox.enabled"> Recolour the score box with the teams' colours</label>
-    <label>Strength <span class="val"></span></label><input type="range" data-k="scorebox.opacity" min="0" max="1" step="0.01">
-    <label class="toggle"><input type="checkbox" data-k="scorebox.mid_enabled"> A middle colour</label>
-    <div class="two">
-      <div><label>Middle colour</label><div class="row" data-colour="scorebox.color_mid"></div></div>
-      <div><label>Middle at <span class="val"></span></label><input type="range" data-k="scorebox.mid_position" min="0.05" max="0.95" step="0.01"></div>
-    </div>
-    <label class="toggle"><input type="checkbox" data-k="scorebox.base_fill"> Fill under the gradient with</label>
-    <div class="row" data-colour="scorebox.base_color" style="max-width: 200px"></div>
-    <div class="two">
-      <div><label>Edge softness <span class="val"></span></label><input type="range" data-k="scorebox.feather" min="0" max="60" step="1"></div>
-      <div><label>Angle <span class="val"></span></label><input type="range" data-k="scorebox.angle" min="-90" max="90" step="1"></div>
-    </div>
-    <h3>Spectated player's side lights up</h3>
-    <label class="toggle"><input type="checkbox" data-k="scorebox.boost.enabled"> Light up the side of the team being spectated</label>
-    <div class="two">
-      <div><label>Opacity + % <span class="val"></span></label><input type="range" data-k="scorebox.boost.opacity_left" min="0" max="200" step="1" data-also="scorebox.boost.opacity_right"></div>
-      <div><label>Lightness + <span class="val"></span></label><input type="range" data-k="scorebox.boost.lightness_left" min="0" max="60" step="1" data-also="scorebox.boost.lightness_right"></div>
-    </div>
-    <label>Fade (seconds) <span class="val"></span></label><input type="range" data-k="scorebox.boost.fade" min="0" max="1" step="0.01">
+  <section data-page="overview">
+    <h2>Game picture</h2>
+    <div class="seg" id="capture-mode"><button data-mode="window">Call of Duty window</button><button data-mode="screen">Whole screen</button></div>
+    <label>Window title contains</label><input type="text" data-k="capture.window_title">
+    <label>Screen (whole screen mode)</label><select data-k="capture.screen" data-num="1"><option value="0">Main screen</option><option value="1">Screen 2</option><option value="2">Screen 3</option><option value="3">Screen 4</option></select>
+    <p class="note">The window is read even while other windows cover it. Use whole screen if the window can't be read (the game must then be visible on that screen).</p>
   </section>
 
   <section data-page="calibration">
@@ -266,53 +221,23 @@
           <td><input type="text" data-k="detector.pixel2.color"></td><td><input type="number" data-k="detector.pixel2.tolerance"></td></tr>
     </table>
     <label class="toggle"><input type="checkbox" data-k="detector.pixel2.enabled"> Check the scoreboard pixel too</label>
-    <label class="toggle"><input type="checkbox" data-k="detector.score_box_only"> Score box up without the scoreboards: keep the score box overlay</label>
-  </section>
-
-  <section data-page="overview">
-    <h2>Game picture</h2>
-    <div class="seg" id="capture-mode"><button data-mode="window">Call of Duty window</button><button data-mode="screen">Whole screen</button></div>
-    <label>Window title contains</label><input type="text" data-k="capture.window_title">
-    <label>Screen (whole screen mode)</label><select data-k="capture.screen" data-num="1"><option value="0">Main screen</option><option value="1">Screen 2</option><option value="2">Screen 3</option><option value="3">Screen 4</option></select>
-    <label>Read every (ms) <span class="val"></span></label><input type="range" data-k="capture.poll_ms" min="10" max="100" step="1">
-    <p class="note">The window is read even while other windows cover it. Use whole screen if the window can't be read (the game must then be visible on that screen).</p>
+    <label class="toggle"><input type="checkbox" data-k="detector.score_box_only"> Score box up without the scoreboards: keep the score box logos and series</label>
   </section>
 
   <section class="wide" data-page="calibration">
-    <h2>Calibration <button class="reset" id="reset-cal">Reset all</button></h2>
-    <p class="note" style="margin-top:0">Positions are in 1920×1080 pixels, whatever resolution the game runs at. The defaults match the CoD caster HUD; you only need these if it moves.</p>
-    <div class="row" style="margin: 10px 0">
-      <label class="toggle" style="flex:0 0 auto; margin:0"><button id="import-btn">Import CoD Scoreboard Suite settings…</button></label>
-      <input type="file" id="import-file" accept=".json,application/json" hidden>
-      <span class="note" style="margin:0">cod_scoreboard_suite_config.json: brings over its pixels, boxes, colours and look.</span>
+    <h2>Names and spectating <button class="reset" id="reset-names">Reset</button></h2>
+    <p class="note" style="margin-top:0">Positions are in 1920×1080 pixels, whatever resolution the game runs at. The defaults match the CoD caster HUD.</p>
+    <label class="toggle"><input type="checkbox" data-k="names.enabled"> Read the players' names</label>
+    <table class="cal" id="rows-table"></table>
+    <div class="two">
+      <div><label>Name cell colour when not spectated</label><input type="text" data-k="spectated.idle_color"></div>
+      <div><label>Tolerance</label><input type="number" data-k="spectated.tolerance"></div>
     </div>
-    <details><summary>Scoreboard rows</summary>
-      <table class="cal" id="rows-table"></table>
-      <div class="two">
-        <div><label>Row colour (icon pixel: normal)</label><input type="text" data-k="highlights.base_color"></div>
-        <div><label>Skull colours (icon pixel: dim)</label><input type="text" data-k="highlights.dim_colors"></div>
-        <div><label>Name cell colour (not spectated)</label><input type="text" data-k="spectated.idle_color"></div>
-        <div><label>Glow edge softness <span class="val"></span></label><input type="range" data-k="highlights.feather" min="0" max="60" step="1"></div>
-      </div>
-      <label class="toggle"><input type="checkbox" data-k="highlights.use_mask"> Glow only on the rows' background colours:</label>
-      <div class="list" data-list="highlights.mask_colors"></div>
-    </details>
-    <details><summary>Score box</summary>
-      <table class="cal">
-        <tr><th></th><th>X</th><th>Y</th><th>Width</th><th>Height</th></tr>
-        <tr><td>Area</td><td><input type="number" data-k="scorebox.x"></td><td><input type="number" data-k="scorebox.y"></td>
-            <td><input type="number" data-k="scorebox.w"></td><td><input type="number" data-k="scorebox.h"></td></tr>
-      </table>
-      <h3>Background colours recoloured</h3>
-      <div class="list" data-list="scorebox.mask_colors"></div>
-      <h3>Always covered (whatever the colour)</h3>
-      <div class="list" data-list="scorebox.overrides"></div>
-    </details>
   </section>
 </main>
 
 <aside>
-  <section data-page="editor live calibration">
+  <section data-page="live calibration players">
     <h2>Preview</h2>
     <div class="preview" id="preview">
       <img id="frame" alt="">
@@ -328,8 +253,8 @@
       <div class="row"><code id="url-local"></code><button data-copy="url-local">Copy</button></div></div>
     <div class="out" id="lan-box" hidden><span>From another PC on the network:</span>
       <div class="row"><code id="url-lan"></code><button data-copy="url-lan">Copy</button></div></div>
-    <label class="toggle"><input type="checkbox" id="network"> Let other PCs on the network load the overlay</label>
-    <p class="note">Lay it over the game feed. It draws on the CoD caster HUD only and hides when the HUD goes away.</p>
+    <label class="toggle"><input type="checkbox" id="network"> Let other PCs on the network load the overlay and connect their cams</label>
+    <p class="note">Lay it over the game feed. It sits on the CoD caster HUD and hides when the HUD goes away.</p>
   </section>
   <section data-page="overview">
     <h2>Log</h2>
@@ -338,7 +263,7 @@
 </aside>
 </div>
 
-<script>window.SHELL = {"app": "CoD HUD", "logo": "assets/logo-white.png", "pages": [{"id": "overview", "label": "Overview"}, {"id": "editor", "label": "HUD Editor"}, {"id": "teams", "label": "Match & Teams", "group": "Event setup"}, {"id": "live", "label": "Live Game", "group": "Live game"}, {"id": "calibration", "label": "Calibration", "icon": "settings", "group": "Live game"}, {"id": "engine", "label": "GFX Engine", "icon": "engine", "group": "Connections"}]};</script>
+<script>window.SHELL = {"app": "CoD HUD", "logo": "assets/logo-white.png", "pages": [{"id": "overview", "label": "Overview"}, {"id": "editor", "label": "HUD Editor"}, {"id": "teams", "label": "Match & Teams", "group": "Event setup"}, {"id": "players", "label": "Players", "icon": "teams", "group": "Event setup"}, {"id": "live", "label": "Live Game", "group": "Live game"}, {"id": "cams", "label": "Webcams", "icon": "cams", "group": "Live game"}, {"id": "calibration", "label": "Calibration", "icon": "settings", "group": "Live game"}, {"id": "engine", "label": "GFX Engine", "icon": "engine", "group": "Connections"}]};</script>
 <script src="enginelink.js"></script>
 <script src="shell.js"></script>
 <script src="update.js"></script>
@@ -349,6 +274,7 @@
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
   var renderUpdate = updateButton($("#update"), $("#version"));
+  var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
 
   function get(obj, path) { return path.split(".").reduce(function (o, k) { return o == null ? o : o[k]; }, obj); }
   function setLocal(path, value) {
@@ -366,47 +292,32 @@
     setLocal(path, value);
     clearTimeout(timers[path]);
     var go = function () { post("/api/config", { path: path, value: value }).catch(function () {}); };
-    if (now) go(); else timers[path] = setTimeout(go, 120);
+    if (now) go(); else timers[path] = setTimeout(go, 150);
+  }
+  // The match: changed here, so it goes to the GFX Engine at once.
+  function saveMatch(changes) {
+    return post("/api/match", { changes: changes }).then(function (d) { info = d; cfg.match = d.config.match; renderTeams(); });
   }
   function validHex(text) { return /^#?[0-9a-f]{6}$/i.test(String(text).trim()); }
   function normHex(text) { text = String(text).trim().toUpperCase(); return text[0] === "#" ? text : "#" + text; }
 
   // --- settings fields --------------------------------------------------------
-  function showVal(el) {
-    var lab = el.previousElementSibling, span = lab && lab.querySelector(".val");
-    if (span) span.textContent = el.value;
-  }
   function bindFields(root) {
     $$("[data-k]", root).forEach(function (el) {
       if (el.dataset.bound) return;
       el.dataset.bound = "1";
       var path = el.dataset.k;
-      el.addEventListener(el.type === "range" || el.type === "text" || el.type === "number" ? "input" : "change", function () {
+      el.addEventListener(el.type === "text" || el.type === "number" ? "input" : "change", function () {
         var value;
         if (el.type === "checkbox") value = el.checked;
-        else if (el.type === "range" || el.type === "number" || el.dataset.num) value = Number(el.value);
+        else if (el.type === "number" || el.dataset.num) value = Number(el.value);
         else value = el.value;
-        if (el.type === "text" && /color|colour/.test(path) && !/colors$/.test(path)) {
+        if (el.type === "text" && /color|colour/.test(path)) {
           if (!validHex(value)) return;
           value = normHex(value);
         }
         if (el.type === "number" && !isFinite(value)) return;
         save(path, value);
-        if (el.dataset.also) save(el.dataset.also, value);
-        showVal(el);
-      });
-    });
-    $$("[data-colour]", root).forEach(function (box) {
-      if (box.dataset.bound) return;
-      box.dataset.bound = "1";
-      var path = box.dataset.colour;
-      box.innerHTML = '<input type="color"><input type="text" maxlength="7">';
-      var pick = box.children[0], text = box.children[1];
-      pick.addEventListener("input", function () { text.value = pick.value.toUpperCase(); save(path, text.value); });
-      text.addEventListener("input", function () {
-        if (!validHex(text.value)) return;
-        pick.value = normHex(text.value).toLowerCase();
-        save(path, normHex(text.value));
       });
     });
   }
@@ -416,110 +327,82 @@
       var value = get(cfg, el.dataset.k);
       if (el.type === "checkbox") el.checked = !!value;
       else el.value = value == null ? "" : value;
-      showVal(el);
-    });
-    $$("[data-colour]", root).forEach(function (box) {
-      var value = get(cfg, box.dataset.colour) || "#000000";
-      if (box.contains(document.activeElement)) return;
-      box.children[0].value = value.toLowerCase();
-      box.children[1].value = value.toUpperCase();
     });
     $$("#capture-mode button").forEach(function (b) { b.classList.toggle("on", cfg.capture.mode === b.dataset.mode); });
   }
 
-  // The calibration table: each row's icon pixel, glow box and name-cell pixel.
+  // The calibration table: each row's name cell and spectated pixel.
   function buildRows() {
-    var html = "<tr><th></th><th>Icon X</th><th>Icon Y</th><th>Tol.</th><th>Glow X</th><th>Glow Y</th><th>W</th><th>H</th>" +
-               "<th>Name X</th><th>Name Y</th><th>On</th></tr>";
+    var n = function (k) { return '<td><input type="number" data-k="' + k + '"></td>'; };
+    var html = "<tr><th></th><th>Name X</th><th>Name Y</th><th>W</th><th>H</th><th>Spectated X</th><th>Spectated Y</th></tr>";
     for (var i = 0; i < 8; i++) {
-      var n = function (k) { return '<td><input type="number" data-k="' + k + '"></td>'; };
       html += "<tr><td>" + (i < 4 ? "Left " + (i + 1) : "Right " + (i - 3)) + "</td>" +
-        n("highlights.pixels." + i + ".x") + n("highlights.pixels." + i + ".y") + n("highlights.pixels." + i + ".tolerance") +
-        n("highlights.boxes." + i + ".x") + n("highlights.boxes." + i + ".y") + n("highlights.boxes." + i + ".w") + n("highlights.boxes." + i + ".h") +
-        n("spectated.pixels." + i + ".x") + n("spectated.pixels." + i + ".y") +
-        '<td><input type="checkbox" data-k="highlights.boxes.' + i + '.enabled"></td></tr>';
+        n("names.rows." + i + ".x") + n("names.rows." + i + ".y") + n("names.rows." + i + ".w") + n("names.rows." + i + ".h") +
+        n("spectated.pixels." + i + ".x") + n("spectated.pixels." + i + ".y") + "</tr>";
     }
+    html += "<tr><td>Player card</td>" + n("names.card.x") + n("names.card.y") + n("names.card.w") + n("names.card.h") + "<td></td><td></td></tr>";
     $("#rows-table").innerHTML = html;
-  }
-
-  // Lists: colours ({hex, tolerance}) or areas ({x, y, w, h}).
-  function buildLists() {
-    $$("[data-list]").forEach(function (box) {
-      var path = box.dataset.list, items = get(cfg, path) || [], areas = /overrides/.test(path);
-      box.innerHTML = "";
-      items.forEach(function (it, i) {
-        var row = document.createElement("div");
-        row.className = "item";
-        var base = path + "." + i;
-        row.innerHTML = '<input type="checkbox" data-k="' + base + '.enabled" title="On">' + (areas
-          ? '<small>X</small><input type="number" data-k="' + base + '.x"><small>Y</small><input type="number" data-k="' + base + '.y">' +
-            '<small>W</small><input type="number" data-k="' + base + '.w"><small>H</small><input type="number" data-k="' + base + '.h">'
-          : '<span class="sw" style="background:' + it.hex + '"></span><input type="text" data-k="' + base + '.hex">' +
-            '<small>tolerance</small><input type="number" data-k="' + base + '.tolerance">') +
-          '<button title="Remove">✕</button>';
-        row.querySelector("button").onclick = function () {
-          var list = (get(cfg, path) || []).slice();
-          list.splice(i, 1);
-          save(path, list, true);
-          buildLists();
-        };
-        box.appendChild(row);
-      });
-      var add = document.createElement("button");
-      add.textContent = areas ? "+ Add an area" : "+ Add a colour";
-      add.onclick = function () {
-        var list = (get(cfg, path) || []).slice();
-        list.push(areas ? { x: 0, y: 0, w: 100, h: 30, enabled: true } : { hex: picked || "#14151B", tolerance: 1, enabled: true });
-        save(path, list, true);
-        buildLists();
-      };
-      box.appendChild(add);
-      bindFields(box);
-      fillFields(box);
-    });
   }
 
   // --- the match ----------------------------------------------------------------
   var logos = [], logoFor = null;
   function buildTeams() {
     $$(".team").forEach(function (box) {
-      var side = box.dataset.team, base = "match." + side;
-      box.innerHTML = '<label>' + (side === "left" ? "Left team" : "Right team") + '</label>' +
-        '<input type="text" data-k="' + base + '.name" placeholder="Team name">' +
-        '<div class="two"><div><label>Tricode</label><input type="text" data-k="' + base + '.tricode" maxlength="6"></div>' +
-        '<div><label>Maps won</label><div class="wins"><button data-win="-1">−</button><b class="w"></b><button data-win="1">+</button></div></div></div>' +
-        '<label>Record line</label><input type="text" data-k="' + base + '.record">' +
+      var side = box.dataset.team;
+      box.innerHTML = '<label>' + (side === "left" ? "Left team (left scoreboard)" : "Right team (right scoreboard)") + '</label>' +
+        '<input type="text" class="t-name" placeholder="Team name">' +
+        '<div class="two"><div><label>Short name</label><input type="text" class="t-short" maxlength="6"></div>' +
+        '<div><label>Series score</label><div class="wins"><button data-win="-1">−</button><b class="w"></b><button data-win="1">+</button></div></div></div>' +
+        '<div class="two"><div><label>Colour</label><div class="swatch-row"><input type="color" class="t-color"></div></div><div></div></div>' +
         '<label>Logo</label><div class="logo-row"><img alt=""><select class="logo-pick"></select><button class="up">Add…</button></div>';
-      box.querySelector(".logo-pick").onchange = function () { save(base + ".logo", this.value, true); renderTeams(); };
+      var t = function () { return cfg.match[side]; };
+      var field = function (cls, key) {
+        var el = box.querySelector(cls), timer = 0;
+        el.addEventListener("input", function () {
+          clearTimeout(timer);
+          var change = {}; change[side] = {}; change[side][key] = el.value;
+          timer = setTimeout(function () { saveMatch(change); }, 400);
+        });
+      };
+      field(".t-name", "name"); field(".t-short", "tricode"); field(".t-color", "color");
+      box.querySelector(".logo-pick").onchange = function () { var c = {}; c[side] = { logo: this.value }; saveMatch(c); };
       box.querySelector(".up").onclick = function () { logoFor = side; $("#logo-file").click(); };
       $$("[data-win]", box).forEach(function (b) {
         b.onclick = function () {
-          var need = Math.ceil(cfg.match.best_of / 2), w = Math.max(0, Math.min(need, (cfg.match[side].wins || 0) + Number(b.dataset.win)));
-          save(base + ".wins", w, true); renderTeams();
+          var need = Math.ceil(cfg.match.best_of / 2), w = Math.max(0, Math.min(need, (t().wins || 0) + Number(b.dataset.win)));
+          var c = {}; c[side] = { wins: w }; saveMatch(c);
         };
       });
     });
   }
   function renderTeams() {
     $$(".team").forEach(function (box) {
-      var t = cfg.match[box.dataset.team], pick = box.querySelector(".logo-pick");
-      pick.innerHTML = '<option value="">No logo</option>' + logos.map(function (l) {
-        return '<option value="' + l + '">' + l.split("/").pop().replace(/\.[a-z]+$/i, "") + "</option>";
+      var side = box.dataset.team, t = cfg.match[side], pick = box.querySelector(".logo-pick");
+      box.style.setProperty("--tc", t.color || "#555");
+      pick.innerHTML = '<option value="">No logo</option>' + logos.concat(t.logo && logos.indexOf(t.logo) < 0 ? [t.logo] : []).map(function (l) {
+        return '<option value="' + esc(l) + '">' + esc(l.split("/").pop().replace(/\.[a-z]+$/i, "")) + "</option>";
       }).join("");
       pick.value = t.logo || "";
       var im = box.querySelector("img");
       if (t.logo) im.src = t.logo; else im.removeAttribute("src");
       box.querySelector(".w").textContent = t.wins || 0;
+      [[".t-name", t.name], [".t-short", t.tricode], [".t-color", (t.color || "#555555").toLowerCase()]].forEach(function (f) {
+        var el = box.querySelector(f[0]);
+        if (el !== document.activeElement) el.value = f[1] || "";
+      });
     });
-    box_colours();
-  }
-  function box_colours() {
-    $('.team[data-team="left"]').style.setProperty("--tc", cfg.highlights.color_left);
-    $('.team[data-team="right"]').style.setProperty("--tc", cfg.highlights.color_right);
+    if (document.activeElement !== $("#best-of")) $("#best-of").value = String(cfg.match.best_of);
+    var eng = info && info.engine;
+    $("#follow-note").textContent = !cfg.global.follow ? "Set here: the GFX Engine's Global information isn't followed."
+      : "While connected to a GFX Engine (GFX Engine page), changes made in its Global information show here within a few seconds; changes made here go to it.";
+    $("#sponsors").innerHTML = (cfg.sponsors.logos || []).map(function (s) {
+      return '<img src="' + esc(s.src) + '" title="' + esc(s.secs) + ' seconds" alt="">';
+    }).join("") || '<span class="note" style="margin:0">None yet.</span>';
   }
   function loadLogos() {
     return fetch("/api/logos").then(function (r) { return r.json(); }).then(function (d) { logos = d.logos; renderTeams(); });
   }
+  $("#best-of").onchange = function () { saveMatch({ best_of: Number(this.value) }); };
   $("#logo-file").onchange = function () {
     var file = this.files[0], side = logoFor;
     this.value = "";
@@ -532,96 +415,150 @@
     };
     reader.readAsDataURL(file);
   };
-  function buildMaps() {
-    var html = "";
-    for (var i = 0; i < 7; i++) {
-      var b = "match.maps." + i;
-      html += '<div class="m" data-i="' + i + '"><span>Map ' + (i + 1) + '</span><input type="text" data-k="' + b + '.name">' +
-        '<select data-k="' + b + '.winner"><option value="">Not played yet</option><option value="left">Left team won</option>' +
-        '<option value="right">Right team won</option></select>' +
-        '<label><input type="radio" name="current" value="' + i + '"> Playing</label></div>';
-    }
-    $("#maps-list").innerHTML = html;
-    $$('#maps-list input[type=radio]').forEach(function (r) {
-      r.onchange = function () { save("match.current_map", Number(r.value), true); };
-    });
-  }
-  function renderMaps() {
-    $$("#maps-list .m").forEach(function (row) {
-      var i = Number(row.dataset.i);
-      row.classList.toggle("off", i >= cfg.match.map_count);
-      row.querySelector("input[type=radio]").checked = i === Number(cfg.match.current_map);
-    });
-  }
   function loadFonts() {
     return fetch("/api/fonts").then(function (r) { return r.json(); }).then(function (d) {
       $$("select.font").forEach(function (sel) {
         var want = get(cfg, sel.dataset.k) || "", names = d.fonts.slice();
         if (want && names.indexOf(want) < 0) names.unshift(want);
-        sel.innerHTML = '<option value="">Bebas Neue (built in)</option>' + names.map(function (n) {
+        sel.innerHTML = '<option value="">Inter (built in)</option>' + names.map(function (n) {
           var missing = d.fonts.indexOf(n) < 0 ? " (not installed here)" : "";
-          return '<option value="' + n.replace(/"/g, "&quot;") + '">' + n + missing + "</option>";
+          return '<option value="' + esc(n) + '">' + esc(n) + missing + "</option>";
         }).join("");
         sel.value = want;
       });
     });
   }
 
+  // --- players: Save IGN to player --------------------------------------------------
+  var links = null, linksNote = "";
+  function renderPlayers() {
+    var names = (info.scanner.names || {}).names || [], spec = info.scanner.spec;
+    $("#players").innerHTML = ["left", "right"].map(function (side, si) {
+      var s = links && links.sides && links.sides[side], team = cfg.match[side];
+      var members = s ? s.members : [];
+      var rows = [0, 1, 2, 3].map(function (k) {
+        var i = si * 4 + k, ign = names[i] || "", p = s && s.players.filter(function (x) { return x.ign === ign; })[0];
+        var m = p && p.linked !== null && p.linked !== undefined ? members[p.linked] : null;
+        return '<div class="prow' + (i === spec ? " spec" : "") + '"><span class="n">' + (i + 1) + "</span>" +
+          (ign ? "<b>" + esc(ign) + "</b>" : '<b class="none">not read yet</b>') +
+          (!ign || !s ? "<span></span>" : m ? '<span class="linked">linked: ' + esc(m.name || m.ign) + "</span>" : '<span class="unlinked">unlinked</span>') +
+          (ign && s && members.length ? '<select data-side="' + side + '" data-ign="' + esc(ign) + '"><option value="">Save IGN to player ▾</option>' +
+            members.map(function (mm) { return '<option value="' + mm.index + '">' + esc(mm.name || mm.ign || "Player " + (mm.index + 1)) + "</option>"; }).join("") +
+            "</select>" : "<span></span>") + "</div>";
+      }).join("");
+      return '<div class="pteam" style="--tc:' + esc(team.color || "#555") + '"><h3>' + esc((s && s.team) || team.name || side + " team") + "</h3>" +
+        (s && !s.found ? '<p class="note">No team called "' + esc(s.team) + '" in GFX Engine\'s Teams, so there\'s no roster to link to.</p>'
+          : s && !members.length ? '<p class="note">' + esc(s.team) + " has no team members in GFX Engine yet (Teams &gt; Team members).</p>" : "") +
+        rows + "</div>";
+    }).join("");
+    $("#players-note").textContent = linksNote;
+    $$("#players select").forEach(function (sel) {
+      sel.onchange = function () {
+        if (sel.value === "") return;
+        post("/api/players/link", { side: sel.dataset.side, player: Number(sel.value), ign: sel.dataset.ign }).then(function (d) {
+          links = d; linksNote = "Saved " + sel.dataset.ign + "."; renderPlayers();
+        }).catch(function () { sel.value = ""; });
+      };
+    });
+  }
+  function refreshLinks() {
+    if (document.hidden || !$("#players").offsetParent || $("#players").contains(document.activeElement)) return;
+    fetch("/api/players").then(function (r) { return r.json(); }).then(function (d) {
+      if (d.error) { links = null; linksNote = /Connect/.test(d.error) ? "Connect to a GFX Engine (GFX Engine page) to link players." : d.error; }
+      else { links = d; if (!/^Saved/.test(linksNote)) linksNote = ""; }
+      renderPlayers();
+    }).catch(function () {});
+  }
+  $("#names-clear").onclick = function () { post("/api/names/clear").then(function (d) { info = d; renderPlayers(); }); };
+
+  // --- webcams ------------------------------------------------------------------------
+  function renderCams() {
+    var cams = info.cams || [], names = (info.scanner.names || {}).names || [], assign = cfg.cams.assign || {};
+    $("#camlist").innerHTML = cams.map(function (c) {
+      var p = c.player;
+      return '<div class="c"><b>' + esc(c.riot_id) + "</b><span>" + esc(c.label || "") + "</span><span>" +
+        (p ? "on the HUD as " + esc(p.name) + " (" + (p.team === "left" ? "left" : "right") + " " + p.slot + ")" : "not matched to a player yet") + "</span></div>";
+    }).join("") || '<p class="note" style="margin:0">No player cams connected.</p>';
+    if ($("#cam-players").contains(document.activeElement)) return;
+    $("#cam-players").innerHTML = ["left", "right"].map(function (side, si) {
+      return '<div class="pteam" style="--tc:' + esc(cfg.match[side].color || "#555") + '"><h3>' + esc(cfg.match[side].name || side) + "</h3>" +
+        [0, 1, 2, 3].map(function (k) {
+          var i = si * 4 + k, ign = names[i] || "", cam = cams.filter(function (c) { return c.player && c.player.team === side && c.player.slot === k + 1; })[0];
+          var pick = assign[ign] || "";
+          return '<div class="prow"><span class="n">' + (i + 1) + "</span>" + (ign ? "<b>" + esc(ign) + "</b>" : '<b class="none">not read yet</b>') +
+            "<span>" + (cam ? '<span class="linked">cam: ' + esc(cam.riot_id) + "</span>" : '<span class="unlinked">no cam</span>') + "</span>" +
+            (ign ? '<select data-ign="' + esc(ign) + '"><option value="">Automatic</option>' + cams.map(function (c) {
+              return '<option value="' + esc(c.riot_id) + '"' + (c.riot_id === pick ? " selected" : "") + ">" + esc(c.riot_id) + "</option>";
+            }).join("") + (pick && !cams.some(function (c) { return c.riot_id === pick; }) ? '<option value="' + esc(pick) + '" selected>' + esc(pick) + " (not connected)</option>" : "") +
+              "</select>" : "<span></span>") + "</div>";
+        }).join("") + "</div>";
+    }).join("");
+    $$("#cam-players select").forEach(function (sel) {
+      sel.onchange = function () { post("/api/cams/assign", { name: sel.dataset.ign, cam: sel.value }).then(function (d) { info = d; cfg.cams = d.config.cams; sel.blur(); renderCams(); }); };
+    });
+  }
+
   // --- live status --------------------------------------------------------------
   var HUD = { on: "On screen", score: "Score box only", off: "Not on screen" };
   function renderInfo() {
-    var s = info.scanner, hudOn = s.hud === "on";
+    var s = info.scanner, n = s.names || {};
     $("#dot").className = "dot" + (s.hud === "on" ? " on" : s.hud === "score" ? " part" : "");
     $("#status-text").textContent = (s.demo ? "Demo · " : "") + "HUD " + HUD[s.hud].toLowerCase() + " · " + s.status;
     $$("#mode button").forEach(function (b) { b.classList.toggle("on", (b.dataset.demo === "1") === s.demo); });
     $("#r-source").textContent = s.status + (s.fps ? " · " + s.fps + " reads/s" : "");
     $("#r-hud").textContent = HUD[s.hud] + (s.raw !== s.hud ? " (changing)" : "") + (cfg.detector.enabled ? "" : " · auto hide is off");
+    var p = info.players[s.spec];
+    $("#r-spec").textContent = p ? (p.name || "row " + (s.spec + 1)) + (p.linked ? " (" + p.linked.name + ")" : "") + " · " + (cfg.match[p.team].name || p.team) : "–";
+    $("#r-names").textContent = (n.names || []).filter(Boolean).length + " of 8 read · " + n.status + (n.card ? " · card: " + n.card : "");
+    var cams = info.cams || [];
+    $("#r-cams").textContent = cams.length ? cams.length + " connected, " + cams.filter(function (c) { return c.player; }).length + " matched to players" : "none connected";
     var d = cfg.detector, c = s.colours || [];
-    function px(i, p) {
+    function px(i, pp) {
       var got = c[i];
-      return '<span class="sw" style="background:' + (got || "transparent") + '"></span>' + (got || "–") + " (want " + p.color + ")";
+      return '<span class="sw" style="background:' + (got || "transparent") + '"></span>' + (got || "–") + " (want " + pp.color + ")";
     }
     $("#r-pixels").innerHTML = "Score box " + px(0, d.pixel1) + (d.pixel2.enabled ? " · Scoreboard " + px(1, d.pixel2) : "");
-    var chips = "";
-    for (var i = 0; i < 8; i++) {
-      var st = hudOn ? s.rows[i] : "–";
-      chips += '<div class="chip ' + st + (s.spectated[i] ? " spec" : "") + '"><span>' + (i < 4 ? "L" : "R") + (i % 4 + 1) +
-               "</span><b>" + st + "</b></div>";
-    }
-    $("#chips").innerHTML = chips;
     var port = info.port;
     $("#url-local").textContent = "http://localhost:" + port + "/overlay";
     $("#lan-box").hidden = !info.lan_url;
     if (info.lan_url) $("#url-lan").textContent = info.lan_url + "/overlay";
-    if (document.activeElement !== $("#network")) $("#network").checked = !!cfg.allow_network;
+    ["#network", "#network-cams"].forEach(function (id) { if (document.activeElement !== $(id)) $(id).checked = !!cfg.allow_network; });
     renderUpdate(info.update);
+    if ($("#players").offsetParent && !$("#players").contains(document.activeElement)) renderPlayers();
+    if ($("#camlist").offsetParent) renderCams();
   }
 
   function load(first) {
     return fetch("/api/state").then(function (r) { return r.json(); }).then(function (d) {
       info = d;
+      var before = cfg && JSON.stringify([cfg.match, cfg.sponsors]);
       if (first || !cfg) {
         cfg = d.config; defaults = d.defaults;
-        buildRows(); buildTeams(); buildMaps(); bindFields(document); buildLists(); fillFields(document);
-        renderMaps(); loadLogos(); loadFonts();
+        buildRows(); buildTeams(); bindFields(document); fillFields(document);
+        loadLogos(); loadFonts();
+      } else {
+        // (the match and sponsors can change from the GFX Engine's Global information)
+        cfg.allow_network = d.config.allow_network; cfg.match = d.config.match; cfg.sponsors = d.config.sponsors; cfg.cams = d.config.cams;
+        if (JSON.stringify([cfg.match, cfg.sponsors]) !== before) loadLogos();
       }
-      else { cfg.allow_network = d.config.allow_network; }
       renderInfo();
     });
   }
   function reloadConfig() {
     return fetch("/api/state").then(function (r) { return r.json(); }).then(function (d) {
-      info = d; cfg = d.config; buildLists(); fillFields(document); renderInfo(); renderTeams(); renderMaps();
+      info = d; cfg = d.config; fillFields(document); renderInfo(); renderTeams();
     });
   }
   // After "Use Global Information" on the GFX Engine page: the new team names and logos.
   window.onEngineGlobal = function () { loadLogos(); reloadConfig(); };
 
   // --- preview: the game picture with the overlay on top --------------------------
-  var preview = $("#preview"), frameImg = $("#frame"), picked = null;
+  var preview = $("#preview"), frameImg = $("#frame");
   function fitPreview() { $("#preview-frame").style.transform = "scale(" + preview.clientWidth / 1920 + ")"; }
   addEventListener("resize", fitPreview);
+  setInterval(fitPreview, 1000);
   function refreshFrame() {
+    if (!preview.offsetParent) return setTimeout(refreshFrame, 1000);
     var img = new Image();
     img.onload = function () { frameImg.src = img.src; $("#no-frame").hidden = true; setTimeout(refreshFrame, 400); };
     img.onerror = function () { $("#no-frame").hidden = false; frameImg.removeAttribute("src"); setTimeout(refreshFrame, 1000); };
@@ -635,7 +572,6 @@
     mark.style.left = (e.clientX - r.left) + "px";
     mark.style.top = (e.clientY - r.top) + "px";
     fetch("/api/pixel?x=" + x + "&y=" + y).then(function (r) { return r.json(); }).then(function (p) {
-      picked = p.hex;
       $("#picked").innerHTML = "<span>X <code>" + x + "</code> Y <code>" + y + "</code></span>" +
         (p.hex ? '<span><span class="sw" style="background:' + p.hex + '"></span><code>' + p.hex + "</code></span>" : "<span class='note' style='margin:0'>no picture</span>") +
         '<button id="copy-pick">Copy</button>';
@@ -650,7 +586,9 @@
   $$("#capture-mode button").forEach(function (b) {
     b.onclick = function () { save("capture.mode", b.dataset.mode, true); fillFields(document); };
   });
-  $("#network").onchange = function () { post("/api/network", { on: this.checked }).then(function (d) { info = d; cfg.allow_network = d.config.allow_network; renderInfo(); }); };
+  ["#network", "#network-cams"].forEach(function (id) {
+    $(id).onchange = function () { post("/api/network", { on: this.checked }).then(function (d) { info = d; cfg.allow_network = d.config.allow_network; renderInfo(); }); };
+  });
   $$("[data-copy]").forEach(function (b) { b.onclick = function () { navigator.clipboard.writeText($("#" + b.dataset.copy).textContent); }; });
   $$("[data-reset]").forEach(function (b) {
     b.onclick = function () {
@@ -658,37 +596,11 @@
         post("/api/reset", { section: b.dataset.reset }).then(reloadConfig);
     };
   });
-  $("#reset-cal").onclick = function () {
-    if (!confirm("Put every position and colour check back to the CoD caster HUD's defaults? (Your colours and look stay.)")) return;
-    var keep = ["pixels", "boxes", "base_color", "dim_colors", "mask_colors", "feather", "use_mask"];
-    var p = Promise.resolve();
-    keep.forEach(function (k) { p = p.then(function () { return post("/api/config", { path: "highlights." + k, value: defaults.highlights[k] }); }); });
-    ["x", "y", "w", "h", "mask_colors", "overrides", "feather"].forEach(function (k) {
-      p = p.then(function () { return post("/api/config", { path: "scorebox." + k, value: defaults.scorebox[k] }); });
-    });
-    p.then(function () { return post("/api/reset", { section: "spectated" }); })
-     .then(function () { return post("/api/reset", { section: "detector" }); }).then(reloadConfig);
-  };
-  $("#swap").onclick = function () {
-    var h = cfg.highlights, s = cfg.scorebox;
-    post("/api/config", { changes: { highlights: { color_left: h.color_right, color_right: h.color_left },
-      scorebox: { color_left: s.color_right, color_right: s.color_left,
-                  boost: { opacity_left: s.boost.opacity_right, opacity_right: s.boost.opacity_left,
-                           lightness_left: s.boost.lightness_right, lightness_right: s.boost.lightness_left } } } })
-      .then(reloadConfig);
+  $("#reset-names").onclick = function () {
+    if (!confirm("Put the name cells and spectated pixels back to the CoD caster HUD's defaults?")) return;
+    post("/api/reset", { section: "names" }).then(function () { return post("/api/reset", { section: "spectated" }); }).then(reloadConfig);
   };
   $("#swap-sides").onclick = function () { post("/api/swap", {}).then(reloadConfig); };
-  $("#import-btn").onclick = function () { $("#import-file").click(); };
-  $("#import-file").onchange = function () {
-    var file = this.files[0];
-    if (!file) return;
-    file.text().then(function (text) {
-      var data;
-      try { data = JSON.parse(text); } catch (e) { alert("That isn't a settings file (" + e.message + ")"); return; }
-      return post("/api/import", data).then(reloadConfig);
-    });
-    this.value = "";
-  };
 
   // --- log ---------------------------------------------------------------------------
   function pollLog() {
@@ -710,7 +622,10 @@
     fitPreview();
     refreshFrame();
     pollLog();
-    setInterval(function () { load(false).catch(function () {}); }, 500);
+    refreshLinks();
+    setInterval(function () { load(false).catch(function () {}); }, 700);
+    setInterval(refreshLinks, 4000);
+    document.addEventListener("click", function () { setTimeout(refreshLinks, 50); });
   });
 })();
 </script>

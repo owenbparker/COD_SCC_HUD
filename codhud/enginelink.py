@@ -7,12 +7,18 @@ original, in hud-link/). A HUD makes one EngineLink with:
 
     source        its name on the engine, e.g. "League HUD" (the engine's data
                   table of its fields has this name)
-    game          "lol", "valorant", "cod" or "rl"
+    game          "lol", "valorant", "cod", "rl" or "smash"
     snapshot()    -> {"fields": {name: value}, "series": {"left": {"name",
-                  "short", "score", "color"}, "right": {...}, "best_of": n}}
+                  "short", "score", "color"}, "right": {...}, "best_of": n},
+                  and optionally "hud": {"port", "network" (other PCs can
+                  read the HUD), "graphics": [{"id", "name", "path", "kind"
+                  ("board" / "overlay")}]}: its own pages, which the engine
+                  adds to its graphics (e.g. VALORANT's agent select)}
     apply_global(g, fetch) -> a short summary of what changed: takes the
                   engine's global configuration (g["left"]["name"], "short",
-                  "logo_url", "color"...); fetch(url) -> bytes for the logos
+                  "logo_url", "color"..., g["tournament_logo_url"],
+                  g["sponsors"]: [{"logo_url", "secs", "white"}]); fetch(url)
+                  -> bytes for the logos (see save_sponsors())
     load() / save(dict)   where the chosen engine is remembered
 
 and serves its routes (see handle()). While connected it sends the snapshot
@@ -226,6 +232,30 @@ class EngineLink:
         self._wake.set()
         return {"summary": summary, "global": g}
 
+    def roster(self, link=None):
+        """The engine's rosters for the two teams, with which of the HUD's
+        players are linked to a roster player by in-game ID ("Save IGN to
+        player"). link={"side", "player" (roster index), "ign"} saves one first."""
+        if not self.url or not self.connected:
+            raise ValueError("Connect to a GFX Engine first")
+        try:
+            snap = self.snapshot() or {}
+        except Exception:
+            snap = {}
+        body = {"game": self.game, "fields": snap.get("fields") or {}}
+        try:
+            if link:
+                reply = _post(self.url + "/api/roster/link", dict(body, **link), 5)
+                if not reply.get("error"):
+                    self.log(f"Saved {link.get('ign')} as a player's in-game ID on {self.name}")
+            else:
+                reply = _post(self.url + "/api/roster/links", body, 5)
+        except Exception as e:
+            raise ValueError(f"Couldn't reach the GFX Engine: {getattr(e, 'reason', e)}")
+        if reply.get("error"):
+            raise ValueError(reply["error"])
+        return reply
+
     def send_now(self):
         self._wake.set()
 
@@ -247,7 +277,7 @@ class EngineLink:
                 self.error = f"Couldn't read the HUD: {e!r}"
                 continue
             body = {"source": self.source, "game": self.game, "fields": snap.get("fields") or {},
-                    "series": snap.get("series") or {}}
+                    "series": snap.get("series") or {}, "hud": snap.get("hud")}
             if body == self._last_body and time.time() - self.sent_at < 4:
                 continue
             try:
@@ -274,6 +304,8 @@ class EngineLink:
             POST /api/engine/connect    {"url"}
             POST /api/engine/disconnect
             POST /api/engine/use-global
+            POST /api/engine/roster     the teams' rosters, and who's linked
+            POST /api/engine/link       {"side", "player", "ign"}: Save IGN to player
         """
         if not path.startswith("/api/engine"):
             return None
@@ -290,7 +322,30 @@ class EngineLink:
             return self.disconnect()
         if path == "/api/engine/use-global":
             return self.use_global()
+        if path == "/api/engine/roster":
+            return self.roster()
+        if path == "/api/engine/link":
+            b = body or {}
+            return self.roster({"side": b.get("side"), "player": b.get("player"), "ign": b.get("ign")})
         return None
+
+
+def save_sponsors(g, fetch, folder, prefix, log=None):
+    """The engine's sponsors (g["sponsors"]: {"logo_url", "secs"...}) downloaded
+    into folder. Returns their paths (prefix + file name), in order, and the
+    seconds each shows (the first one's), or ([], None) when it has none."""
+    import os
+    import urllib.parse
+    paths = []
+    sponsors = [sp for sp in g.get("sponsors") or [] if sp.get("logo_url")]
+    for i, sp in enumerate(sponsors, 1):
+        base = os.path.splitext(os.path.basename(urllib.parse.unquote(sp["logo_url"].split("?")[0])))[0]
+        try:
+            paths.append(prefix + save_logo_bytes(folder, f"engine-{i}-{base}", fetch(sp["logo_url"])))
+        except Exception as e:
+            if log:
+                log(f"Couldn't fetch the sponsor {base} from the GFX Engine: {e}", "warn")
+    return paths, (sponsors[0].get("secs") if sponsors else None)
 
 
 def save_logo_bytes(folder, name, blob):

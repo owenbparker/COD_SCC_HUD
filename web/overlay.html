@@ -5,393 +5,151 @@
 <title>CoD HUD overlay</title>
 <!--
   The overlay: a 1920x1080 browser source for vMix / OBS, laid over the game.
-  It paints over the CoD caster HUD, never next to it:
-    - a glow in each scoreboard row around the player's name, in their team's
-      colour (brighter while they're on the objective, dimmer while dead);
-    - the score box's background, recoloured with a gradient between the
-      two teams' colours (the side of the spectated player's team lights up).
-  Only the HUD's background is painted (the masks the app sends are where
-  it is), so its text, numbers and icons show through untouched.
-
-  On top of that, the title (the BO7 In Game Scoreboard vMix title): each
-  team's name plate, logo and record line over the HUD's own team bars, the
-  logos, tricodes and series score in the score box, and the maps of the
-  series along the bottom. Everything shows only while the CoD caster HUD is
-  on screen.
-
-  The glow and gradient are the CoD Scoreboard Suite's, drawn here instead.
+  It sits on the CoD caster HUD (the NEW COD OVERLAY vMix title, placed as in
+  CDL broadcasts):
+    - each team's name plate over the HUD's team bars: the team's name, with a
+      strip of its logo at the outer end;
+    - the team logos in the score box, over the game's own;
+    - the series score in place of the game's pips (over "BEST OF");
+    - the spectated player's webcam, left of their player card;
+    - the sponsors, one after another, under the middle of the screen.
+  Everything shows only while the CoD caster HUD is on screen (the score box
+  parts also while only the score box is up). Teams, logos, scores and
+  sponsors are the HUD's match, which follows the GFX Engine's Global
+  information.
 -->
 <style>
+  @font-face { font-family: "SCC fallback"; src: url("fonts/Inter.ttf") format("truetype"); font-weight: 100 900; }
   html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
-  @font-face { font-family: "SCC fallback"; src: url("fonts/BebasNeue.ttf") format("truetype"); }
-  canvas { position: absolute; display: none; z-index: 1; }
-  canvas.on { display: block; }
-  /* The title: positions and sizes are the vMix title's. */
-  #title { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 2; }
-  #title > div { display: none; }
-  #title > div.on { display: block; }
+  .part { position: absolute; opacity: 0; transition: opacity .25s ease; pointer-events: none; }
+  .part.on { opacity: 1; }
   .abs { position: absolute; }
   .clip { position: absolute; overflow: hidden; }
   .logo { position: absolute; object-fit: contain; }
-  .text { position: absolute; color: #fff; white-space: nowrap; display: flex; align-items: center; }
-  .plate { background: #000; }
-  .record-bg { background: #343642; }
-  .name { font-family: var(--f-name); font-size: 50px; font-weight: 500; font-stretch: condensed; }
-  .record { font-family: var(--f-record); font-size: 28px; font-weight: 100; text-shadow: 0 0 3px rgba(0, 0, 0, .9); }
-  .tricode { font-family: var(--f-tricode); font-size: 25px; }
-  .best-of { font-family: var(--f-best-of); font-size: 23px; font-weight: 100; opacity: .85; justify-content: center; }
-  .pip { position: absolute; width: 10px; height: 10px; top: 28px; background: rgba(255, 255, 255, .4); }
-  .pip.gold { background: rgba(211, 160, 31, .4); }
-  .pip.won { background: #fff; }
-  .pip.gold.won { background: #d3a01f; }
-  .separator { left: 723px; top: 48px; width: 474px; height: 1px; background: #f2f2f2; opacity: .8; }
-  /* The map strip, and its way in (the title's storyboard). */
-  .map .bg { position: absolute; inset: 0; background: #14161f; opacity: .8; }
-  .map .label { position: absolute; left: 0; top: 4px; width: 224px; height: 16px; background: url("assets/title/map_labels.png") no-repeat; }
-  .map .info { font-family: var(--f-maps); font-size: 18.5px; left: 58px; top: 1px; width: 167px; height: 22px; }
-  .map .win { position: absolute; left: 180px; top: -11px; width: 40px; height: 40px; object-fit: contain; }
-  .map .current { position: absolute; left: 0; top: -2px; width: 224px; height: 2px; background: #fff; display: none; }
-  .map.is-current .current { display: block; }
-  #maps .bg { clip-path: inset(100% 0 0 0); }
-  #maps .label, #maps .info, #maps .win { opacity: 0; }
-  #maps .current { clip-path: inset(0 100% 0 0); }
-  #maps.in .bg { clip-path: inset(0 0 0 0); transition: clip-path .5s cubic-bezier(.55, .06, .68, .19) var(--d-bg); }
-  #maps.in .label, #maps.in .info, #maps.in .win { opacity: 1; transition: opacity .25s linear var(--d-text); }
-  #maps.in .current { clip-path: inset(0 0 0 0); transition: clip-path .3s cubic-bezier(.55, .06, .68, .19) 1.25s; }
+  /* The name plates: the title's box art, the name, the logo strip. */
+  .plate { width: 611px; height: 52px; background: center / 100% 100% no-repeat; }
+  .plate.left { left: 42px; top: 17px; background-image: url("assets/overlay/box-left.png"); }
+  .plate.right { left: 1266px; top: 16px; width: 612px; height: 53px; background-image: url("assets/overlay/box-right.png"); }
+  .name { position: absolute; top: 0; height: 100%; display: flex; align-items: center; color: #fff; white-space: nowrap;
+          font-family: var(--f-name); font-size: 46px; font-weight: 800; text-transform: uppercase; letter-spacing: -.005em; line-height: 1; }
+  .name span { display: block; transform: translateY(.03em); }
+  .plate.left .name { left: 242px; width: 359px; justify-content: flex-end; }
+  .plate.right .name { left: 10px; width: 359px; }
+  /* The score box: a dark backing over the game's logo, the team's logo on it. */
+  .mini-bg { background: #131519; }
+  /* The series score, over the game's pips. */
+  .pip-cover { background: #14151B; }
+  .pip { position: absolute; top: 28px; width: 11px; height: 11px; background: #4e4f55; }
+  .pip.won { background: var(--won, #fff); }
+  .best-of { position: absolute; left: 899px; top: 20px; width: 122px; height: 27px; background: #23252D; color: #fff;
+             display: flex; align-items: center; justify-content: center; font: 500 19px "SCC fallback", sans-serif; letter-spacing: .02em; }
+  /* The webcam: CDL's place, left of the game's player card. */
+  #cam { left: 1238px; top: 896px; width: 175px; height: 130px; background: #0c0d10; overflow: hidden;
+         transform: translateX(12px); transition: opacity .25s ease, transform .35s cubic-bezier(.2, .8, .2, 1); }
+  #cam.on { transform: none; }
+  #cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+  #cam video.on { opacity: 1; }
+  #cam .dummy { position: absolute; inset: 0; display: none; background: radial-gradient(circle at 50% 38%, #4a4c58, #1b1c22 72%); }
+  #cam .dummy.on { display: block; }
+  #cam .dummy i { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font: 600 11px "SCC fallback", sans-serif;
+                  letter-spacing: .12em; color: #fff9; font-style: normal; }
+  #cam .dummy b { position: absolute; left: 0; right: 0; top: 46px; text-align: center; font: 800 20px "SCC fallback", sans-serif; color: #fff; }
+  /* The sponsors: CDL's box under the middle of the screen. */
+  #sponsor { left: 857px; top: 939px; width: 206px; height: 97px; background: rgba(46, 44, 42, .94);
+             box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .85); }
+  #sponsor::before { content: ""; position: absolute; left: 4px; top: 0; width: 22px; height: 3px; background: #fff; }
+  #sponsor img { position: absolute; left: 18px; top: 12px; width: 170px; height: 73px; object-fit: contain; opacity: 0; transition: opacity .4s ease; }
+  #sponsor img.on { opacity: 1; }
 </style>
+<style id="fonts"></style>
 </head>
 <body>
-<div id="title">
-  <div id="plates"></div>
-  <div id="score-title"></div>
-  <div id="maps"></div>
-</div>
+<div class="part" id="plates"></div>
+<div class="part" id="logos"></div>
+<div class="part" id="pips"></div>
+<div class="part" id="cam"><div class="videos"></div><div class="dummy"><b></b><i>DEMO CAM</i></div></div>
+<div class="part" id="sponsor"></div>
+<script src="cams.js"></script>
 <script>
 (function () {
   "use strict";
-
-  // --- colours (Python's colorsys, for the same results as the Suite) ---------
-  function hex(text) {
-    var m = /^#?([0-9a-f]{6})$/i.exec(String(text || "").trim());
-    var n = m ? parseInt(m[1], 16) : 0;
-    return [n >> 16 & 255, n >> 8 & 255, n & 255];
-  }
-  function rgbToHls(r, g, b) {
-    var maxc = Math.max(r, g, b), minc = Math.min(r, g, b), l = (minc + maxc) / 2;
-    if (minc === maxc) return [0, l, 0];
-    var s = l <= 0.5 ? (maxc - minc) / (maxc + minc) : (maxc - minc) / (2 - maxc - minc);
-    var rc = (maxc - r) / (maxc - minc), gc = (maxc - g) / (maxc - minc), bc = (maxc - b) / (maxc - minc), h;
-    if (r === maxc) h = bc - gc; else if (g === maxc) h = 2 + rc - bc; else h = 4 + gc - rc;
-    h = ((h / 6) % 1 + 1) % 1;
-    return [h, l, s];
-  }
-  function v(m1, m2, hue) {
-    hue = ((hue % 1) + 1) % 1;
-    if (hue < 1 / 6) return m1 + (m2 - m1) * hue * 6;
-    if (hue < 0.5) return m2;
-    if (hue < 2 / 3) return m1 + (m2 - m1) * (2 / 3 - hue) * 6;
-    return m1;
-  }
-  function hlsToRgb(h, l, s) {
-    if (s === 0) return [l, l, l];
-    var m2 = l <= 0.5 ? l * (1 + s) : l + s - l * s, m1 = 2 * l - m2;
-    return [v(m1, m2, h + 1 / 3), v(m1, m2, h), v(m1, m2, h - 1 / 3)];
-  }
-  function clamp(x, lo, hi) { return x < lo ? lo : x > hi ? hi : x; }
-  // rgb with its lightness raised by lum points (and hue turned, saturation raised).
-  function shifted(rgb, lum, hueDeg, sat) {
-    var hls = rgbToHls(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
-    var h = (((hls[0] + (hueDeg || 0) / 360) % 1) + 1) % 1;
-    var out = hlsToRgb(h, clamp(hls[1] + lum / 100, 0, 1), clamp(hls[2] + (sat || 0) / 100, 0, 1));
-    return [out[0] * 255, out[1] * 255, out[2] * 255];
-  }
-  function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
-
-  // A value easing to its target over a set time (restarting from wherever it is).
-  function Ease(value) { this.v0 = this.v1 = value || 0; this.t0 = 0; this.dur = 0; this.target = this.v1; }
-  Ease.prototype.value = function (now) {
-    if (this.dur <= 0) return this.v1;
-    var t = clamp((now - this.t0) / this.dur, 0, 1);
-    return this.v0 + (this.v1 - this.v0) * t;
-  };
-  Ease.prototype.to = function (target, seconds, now) {
-    if (target === this.target) return;
-    this.v0 = this.value(now); this.v1 = this.target = target; this.t0 = now;
-    this.dur = seconds > 0 ? seconds : 0;
-  };
-  Ease.prototype.snap = function (value) { this.v0 = this.v1 = this.target = value; this.dur = 0; };
-
-  // --- one painted area: a canvas, its mask, what it last drew -------------------
-  var areas = {};
-  function area(key) {
-    if (!areas[key]) {
-      var c = document.createElement("canvas");
-      document.body.appendChild(c);
-      areas[key] = { canvas: c, ctx: c.getContext("2d"), mask: null, maskId: null, wanted: null, drawn: null,
-                     hl: new Ease(0), dim: new Ease(0) };
-    }
-    return areas[key];
-  }
-
-  // Decodes a mask (PNG, grey = how much of each pixel is HUD background).
-  function loadMask(key, m) {
-    var a = area(key);
-    a.wanted = m.id;
-    var img = new Image();
-    img.onload = function () {
-      if (a.wanted !== m.id) return;      // a newer one has arrived
-      var c = document.createElement("canvas");
-      c.width = m.w; c.height = m.h;
-      var ctx = c.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      var px = ctx.getImageData(0, 0, m.w, m.h).data, mask = new Float32Array(m.w * m.h);
-      for (var i = 0; i < mask.length; i++) mask[i] = px[i * 4] / 255;
-      a.mask = mask; a.maskId = m.id; a.x = m.x; a.y = m.y; a.w = m.w; a.h = m.h;
-      a.canvas.width = m.w; a.canvas.height = m.h;
-      a.canvas.style.left = m.x + "px"; a.canvas.style.top = m.y + "px";
-      a.image = a.ctx.createImageData(m.w, m.h);
-      a.drawn = null;
-    };
-    img.src = m.png;
-  }
-
-  // --- the row glow (the Suite's Scoreboard Highlights) -----------------------
-  // cov: 1 inside the (optionally rounded) box; e: 0 in the dark middle -> 1 at
-  // the edges, steeper near them. The middle is rectangular: from each
-  // pixel's distance to the nearest lit edge.
-  var mapCache = {};
-  function glowMaps(w, h, s) {
-    var key = [w, h, s.edges.top, s.edges.bottom, s.edges.left, s.edges.right, s.side_depth, s.reach, s.oval,
-               s.core, s.falloff, s.corner].join(",");
-    if (mapCache[key]) return mapCache[key];
-    var hs = Math.max(0.05, s.side_depth / 100), reach = Math.max(Math.min(w, h) / 2 * Math.max(0.05, s.reach / 100), 1e-3);
-    var oval = clamp(s.oval / 100, 0, 1), core = clamp(s.core / 100, 0, 0.95), fall = Math.max(0.05, s.falloff);
-    var rad = Math.min(Math.max(0, s.corner), w / 2, h / 2);
-    var cov = new Float32Array(w * h), e = new Float32Array(w * h);
-    for (var y = 0; y < h; y++) {
-      var ys = y + 0.5;
-      for (var x = 0; x < w; x++) {
-        var xs = x + 0.5, d = 1e9;
-        if (s.edges.left) d = Math.min(d, Math.max(xs - 0.5, 0) / hs);
-        if (s.edges.right) d = Math.min(d, Math.max(w - xs - 0.5, 0) / hs);
-        if (s.edges.top) d = Math.min(d, Math.max(ys - 0.5, 0));
-        if (s.edges.bottom) d = Math.min(d, Math.max(h - ys - 0.5, 0));
-        var t = 1 - clamp(d / reach, 0, 1);
-        if (oval > 0) {
-          var dx = (xs - w / 2) / (w / 2), dy = (ys - h / 2) / (h / 2);
-          t = t * (1 - oval) + clamp(Math.sqrt(dx * dx + dy * dy) / Math.max(0.05, s.reach / 100), 0, 1) * oval;
-        }
-        var ee = clamp((t - core) / Math.max(1 - core, 1e-3), 0, 1);
-        var c = 1;
-        if (rad > 0) {
-          var px = Math.abs(xs - w / 2) - (w / 2 - rad), py = Math.abs(ys - h / 2) - (h / 2 - rad);
-          var cd = Math.sqrt(Math.pow(Math.max(px, 0), 2) + Math.pow(Math.max(py, 0), 2)) + Math.min(Math.max(px, py), 0) - rad;
-          c = clamp(0.5 - cd, 0, 1);
-        }
-        e[y * w + x] = Math.pow(ee, fall);
-        cov[y * w + x] = c;
-      }
-    }
-    mapCache = {};
-    mapCache[key] = { cov: cov, e: e };
-    return mapCache[key];
-  }
-
-  function drawGlow(a, side, hl, dim, s) {
-    var base = hex(side ? s.color_right : s.color_left), op = s.opacity;
-    var effOp = clamp(op + (op * (1 + s.bright_opacity / 100) - op) * hl + (Math.max(0, op * (1 - s.dim_opacity / 100)) - op) * dim, 0, 4);
-    // Lighter while on the objective, darker while dead.
-    var up = s.bright_lightness > 0 ? shifted(base, s.bright_lightness) : base;
-    var down = s.dim_lightness > 0 ? shifted(base, -s.dim_lightness) : base;
-    var col = [0, 1, 2].map(function (c) { return base[c] + (up[c] - base[c]) * hl + (down[c] - base[c]) * dim; });
-    var edge = shifted(col, s.edge_brighten, s.edge_hue, s.edge_saturation);
-    var maps = glowMaps(a.w, a.h, s), cop = clamp(s.center_opacity / 100, 0, 1), eop = clamp(s.edge_opacity / 100, 0, 1);
-    var out = a.image.data, mask = s.use_mask === false ? null : a.mask;
-    for (var i = 0, n = a.w * a.h; i < n; i++) {
-      var e = maps.e[i], k = i * 4;
-      out[k] = col[0] + (edge[0] - col[0]) * e;
-      out[k + 1] = col[1] + (edge[1] - col[1]) * e;
-      out[k + 2] = col[2] + (edge[2] - col[2]) * e;
-      out[k + 3] = maps.cov[i] * effOp * 255 * (cop * (1 - e) + eop * e) * (mask ? mask[i] : 1);
-    }
-    a.ctx.putImageData(a.image, 0, 0);
-  }
-
-  // --- the score box gradient (the Suite's Gradient Overlay) -------------------
-  var tCache = {};
-  function gradientT(w, h, s) {
-    var steps = Math.round(s.steps || 0), key = [w, h, s.squish, s.angle, steps].join(",");
-    if (tCache[key]) return tCache[key];
-    var t = new Float32Array(w * h), ang = (s.angle || 0) * Math.PI / 180, dx = Math.cos(ang), dy = Math.sin(ang);
-    var squish = Math.max(s.squish || 1, 1e-3);
-    for (var y = 0; y < h; y++) {
-      var gy = (y + 0.5) / h;
-      for (var x = 0; x < w; x++) {
-        var gx = ((x + 0.5) / w - 0.5) * squish + 0.5;
-        var u = clamp((gx - 0.5) * dx + (gy - 0.5) * dy + 0.5, 0, 1);
-        u = u < 0.5 ? 0.5 * Math.pow(u * 2, 2.2) : 1 - 0.5 * Math.pow((1 - u) * 2, 2.2);
-        if (steps >= 2) u = Math.round(u * (steps - 1)) / (steps - 1);
-        t[y * w + x] = u;
-      }
-    }
-    tCache = {};
-    tCache[key] = t;
-    return t;
-  }
-
-  function drawScore(a, left, right, s) {
-    var L = hex(s.color_left), R = hex(s.color_right), M = hex(s.color_mid), B = hex(s.base_color);
-    var b = s.boost || {}, on = b.enabled !== false;
-    if (on && left > 0 && b.lightness_left > 0) L = mix(L, shifted(L, b.lightness_left), left);
-    if (on && right > 0 && b.lightness_right > 0) R = mix(R, shifted(R, b.lightness_right), right);
-    var op = s.opacity;
-    var opL = op + (Math.min(1, op * (1 + (on ? b.opacity_left : 0) / 100)) - op) * left;
-    var opR = op + (Math.min(1, op * (1 + (on ? b.opacity_right : 0) / 100)) - op) * right;
-    var T = gradientT(a.w, a.h, s), mid = clamp(s.mid_position, 0.01, 0.99), out = a.image.data, mask = a.mask;
-    for (var i = 0, n = a.w * a.h; i < n; i++) {
-      var t = T[i], g;
-      if (s.mid_enabled) g = t < mid ? mix(L, M, clamp(t / mid, 0, 1)) : mix(M, R, clamp((t - mid) / (1 - mid), 0, 1));
-      else g = mix(L, R, t);
-      var o = opL * (1 - t) + opR * t, k = i * 4;
-      if (s.base_fill) {
-        out[k] = B[0] * (1 - o) + g[0] * o; out[k + 1] = B[1] * (1 - o) + g[1] * o; out[k + 2] = B[2] * (1 - o) + g[2] * o;
-        out[k + 3] = mask[i] * 255;
-      } else {
-        out[k] = g[0]; out[k + 1] = g[1]; out[k + 2] = g[2];
-        out[k + 3] = mask[i] * o * 255;
-      }
-    }
-    a.ctx.putImageData(a.image, 0, 0);
-  }
-
-  // --- the title ---------------------------------------------------------------
-  var title = document.getElementById("title"), titleKey = null;
-  var MAP_X = [194, 434, 675, 916, 1157, 1398, 1639];
-  var BG_DELAY = [0.25, 0.35, 0.3, 0.55, 0.65, 0.75, 0.85], TEXT_DELAY = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1];
-  // Installed fonts first (on this PC, or sent by the app), then the bundled one.
-  var fontCss = document.createElement("style");
-  document.head.appendChild(fontCss);
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { hud: "off" }, look = null, builtKey = null;
 
   function esc(text) {
     return String(text == null ? "" : text).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
   }
-  function box(cls, x, y, w, h, inner, style) {
-    return '<div class="' + cls + '" style="left:' + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px;" + (style || "") + '">' + (inner || "") + "</div>";
+  function src(path) { return /^(https?:|data:)/.test(path || "") ? path : "/" + String(path || "").split("/").map(encodeURIComponent).join("/"); }
+  function img(path, x, y, w, h) {
+    return path ? '<img class="logo" src="' + esc(src(path)) + '" style="left:' + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + 'px" alt="">' : "";
   }
-  function img(src, x, y, w, h, cls) {
-    return src ? '<img class="' + (cls || "logo") + '" src="' + esc(src) + '" style="left:' + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + 'px" alt="">' : "";
+  function box(cls, x, y, w, h, inner) {
+    return '<div class="' + cls + '" style="left:' + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + 'px">' + (inner || "") + "</div>";
   }
-  // Long text shrinks to fit its box.
-  function fit(root) {
-    Array.prototype.forEach.call(root.querySelectorAll(".text"), function (el) {
-      var span = el.firstChild;
-      if (!span || !span.style) return;
-      var size = parseFloat(getComputedStyle(el).fontSize);
+  // A long team name shrinks to fit its box.
+  function fit() {
+    Array.prototype.forEach.call(document.querySelectorAll(".name"), function (el) {
+      var span = el.firstChild, size = 46;
+      if (!span) return;
       span.style.fontSize = "";
-      while (span.scrollWidth > el.clientWidth && size > 8) { size -= 1; span.style.fontSize = size + "px"; }
+      while (span.scrollWidth > el.clientWidth && size > 14) { size -= 1; span.style.fontSize = size + "px"; }
     });
   }
 
-  function buildTitle() {
-    var m = look.match, f = look.fonts || {}, key = JSON.stringify([m, f, look.title]);
-    if (key === titleKey) return;
-    titleKey = key;
-    var css = "", vars = "";
-    ["name", "tricode", "record", "maps", "best_of"].forEach(function (role) {
-      var fam = (f[role] || "").replace(/["\\]/g, ""), slug = role.replace("_", "-");
-      if (fam) css += '@font-face { font-family: "SCC ' + role + '"; src: local("' + fam + '"), url("/fonts/local/' + encodeURIComponent(fam) + '"); }';
-      vars += "--f-" + slug + ': ' + (fam ? '"' + fam + '", "SCC ' + role + '", ' : "") + '"SCC fallback", sans-serif;';
-    });
-    fontCss.textContent = css + ":root {" + vars + "}";
+  function build() {
+    var m = look.match, key = JSON.stringify([m, look.fonts]);
+    if (key === builtKey) return;
+    builtKey = key;
+    var fam = String((look.fonts || {}).name || "").replace(/["\\]/g, "");
+    $("fonts").textContent = (fam ? '@font-face { font-family: "SCC name"; src: local("' + fam + '"), url("/fonts/local/' + encodeURIComponent(fam) + '"); font-weight: 100 900; }' : "") +
+      ":root { --f-name: " + (fam ? '"' + fam + '", "SCC name", ' : "") + '"SCC fallback", sans-serif; }';
     var L = m.left || {}, R = m.right || {};
-    var span = function (t) { return "<span>" + esc(t) + "</span>"; };
-    // The name plates (over the HUD's team bars): logo at the outer end, name, record line.
-    document.getElementById("plates").innerHTML =
-      box("clip plate", 43, 17, 610, 51, img(L.logo, -7, -29, 168, 109)) +
-      box("clip plate", 1267, 17, 610, 51, img(R.logo, 447, -32, 173, 114)) +
-      box("text name", 191, 17, 456, 54, span(L.name), "justify-content:flex-end") +
-      box("text name", 1273, 16, 455, 54, span(R.name)) +
-      box("abs record-bg", 80, 68, 373, 29) + box("abs record-bg", 1304, 68, 373, 29) +
-      box("text record", 96, 69, 342, 29, span(L.record)) + box("text record", 1320, 69, 342, 29, span(R.record));
-    // The score box: logos, tricodes, the series score and how many it's best of.
-    var need = Math.min(5, Math.ceil((Number(m.best_of) || 1) / 2)), pips = "";
-    for (var k = 1; k <= need; k++) {
-      var cls = "pip" + (k === 5 ? " gold" : "");
-      pips += '<div class="' + cls + ((L.wins || 0) >= k ? " won" : "") + '" style="left:' + (894 - 17 * (k - 1)) + 'px"></div>';
-      pips += '<div class="' + cls + ((R.wins || 0) >= k ? " won" : "") + '" style="left:' + (1018 + 17 * (k - 1)) + 'px"></div>';
+    // The name plates: the logo strip (the title's crop of a 193px logo) at the outer end.
+    $("plates").innerHTML =
+      '<div class="clip plate left">' + img(L.logo, 9 + 28.5, -58.5, 193, 193) + '<div class="name"><span>' + esc(L.name) + "</span></div></div>" +
+      '<div class="clip plate right">' + img(R.logo, 364 + 28.5, -53.5, 193, 193) + '<div class="name"><span>' + esc(R.name) + "</span></div></div>";
+    // The score box's logos, over the game's.
+    $("logos").innerHTML = box("abs mini-bg", 734, 55, 67, 93) + box("abs mini-bg", 1116, 55, 68, 93) +
+      img(L.logo, 734, 64, 75, 75) + img(R.logo, 1109, 64, 75, 75);
+    // The series score: a pip per map needed to win, inner ones first.
+    var need = Math.min(5, Math.max(1, Math.ceil((Number(m.best_of) || 1) / 2)));
+    // (the game's own, up to 5 a side, covered)
+    var pips = box("abs pip-cover", 794, 25, 90, 17) + box("abs pip-cover", 1038, 25, 90, 17);
+    for (var k = 0; k < need; k++) {
+      pips += '<div class="pip' + ((L.wins || 0) > k ? " won" : "") + '" style="left:' + (866 - 17 * k) + "px;--won:" + esc(L.color || "#fff") + '"></div>';
+      pips += '<div class="pip' + ((R.wins || 0) > k ? " won" : "") + '" style="left:' + (1042 + 17 * k) + "px;--won:" + esc(R.color || "#fff") + '"></div>';
     }
-    document.getElementById("score-title").innerHTML =
-      img(L.logo, 723, 53, 85, 98) + img(R.logo, 1111, 54, 85, 98) +
-      box("text tricode", 731, 17, 83, 35, span(L.tricode)) + box("text tricode", 1105, 17, 83, 35, span(R.tricode), "justify-content:flex-end") +
-      (look.title.best_of_text !== false ? box("text best-of", 891, 19, 139, 35, span("BEST OF " + m.best_of)) : "") +
-      pips + '<div class="abs separator"></div>';
-    // The maps of the series.
-    var maps = "", count = Math.max(0, Math.min(7, Number(m.map_count) || 0));
-    for (var i = 0; i < count; i++) {
-      var mp = (m.maps || [])[i] || {}, win = mp.winner === "left" ? L.logo : mp.winner === "right" ? R.logo : "";
-      maps += '<div class="clip map' + (i === Number(m.current_map) ? " is-current" : "") + '" style="left:' + MAP_X[i] +
-        "px;top:1056px;width:224px;height:24px;overflow:visible;--d-bg:" + BG_DELAY[i] + "s;--d-text:" + TEXT_DELAY[i] + 's">' +
-        '<div class="clip" style="inset:0">' + '<div class="bg"></div>' + img(win, 180, -11, 40, 40, "win") + "</div>" +
-        '<div class="label" style="background-position:' + (200 - MAP_X[i]) + 'px 0"></div>' +
-        box("text info", 58, 1, 167, 22, span(mp.name)) + '<div class="current"></div></div>';
-    }
-    document.getElementById("maps").innerHTML = maps;
-    fit(title);
-    if (document.fonts) document.fonts.ready.then(function () { fit(title); });
+    // ("BEST OF n" too, so it says the same as the pips)
+    $("pips").innerHTML = pips + '<div class="best-of">BEST OF ' + esc(m.best_of) + "</div>";
+    fit();
+    if (document.fonts) document.fonts.ready.then(fit);
   }
 
-  var mapsShown = false;
-  function showTitle() {
-    var t = look.title || {}, on = t.enabled !== false;
-    document.getElementById("plates").classList.toggle("on", on && t.plates !== false && state.hud === "on");
-    document.getElementById("score-title").classList.toggle("on", on && t.score_box !== false && state.hud !== "off");
-    var maps = document.getElementById("maps"), showMaps = on && t.maps !== false && state.hud === "on";
-    maps.classList.toggle("on", showMaps);
-    if (showMaps !== mapsShown) {
-      mapsShown = showMaps;
-      if (showMaps) { void maps.offsetWidth; maps.classList.add("in"); }   // (plays the way in)
-      else maps.classList.remove("in");
+  // The sponsors: one after another, each for its seconds.
+  var sponsorKey = null, sponsorAt = 0, sponsorIndex = 0;
+  function sponsors(now) {
+    var list = look.sponsors || [], key = JSON.stringify(list), el = $("sponsor");
+    if (key !== sponsorKey) {
+      sponsorKey = key;
+      el.innerHTML = list.map(function (s) { return '<img src="' + esc(src(s.src)) + '" alt="">'; }).join("");
+      sponsorIndex = 0; sponsorAt = now;
     }
+    if (list.length > 1 && now - sponsorAt >= (Number(list[sponsorIndex].secs) || 10) * 1000) {
+      sponsorIndex = (sponsorIndex + 1) % list.length; sponsorAt = now;
+    }
+    Array.prototype.forEach.call(el.children, function (im, i) { im.classList.toggle("on", i === sponsorIndex); });
+    return list.length > 0;
   }
 
-  // --- the reading from the app, and drawing it ---------------------------------
-  var state = { hud: "off", rows: [], spectated: [], masks: {} }, look = null, lookVersion = 0;
-
-  function frame() {
-    var now = performance.now() / 1000;
+  function frame(now) {
     if (look) {
-      var h = look.highlights, s = look.scorebox;
-      var rowsOn = state.hud === "on" && h.enabled !== false, scoreOn = state.hud !== "off" && s.enabled !== false;
-      for (var i = 0; i < 8; i++) {
-        var a = areas["row" + i];
-        if (!a) continue;
-        var show = rowsOn && !!state.masks["row" + i] && a.maskId === state.masks["row" + i];
-        if (!rowsOn) { a.hl.snap(0); a.dim.snap(0); }
-        else {
-          var st = state.rows[i];
-          a.hl.to(st === "bright" ? 1 : 0, h.fade, now);
-          a.dim.to(st === "dim" ? 1 : 0, h.fade, now);
-        }
-        a.canvas.classList.toggle("on", show);
-        if (!show) continue;
-        var hl = a.hl.value(now), dim = a.dim.value(now), key = [a.maskId, hl.toFixed(3), dim.toFixed(3), lookVersion].join("|");
-        if (key !== a.drawn) { drawGlow(a, i >= 4, hl, dim, h); a.drawn = key; }
-      }
-      var sc = areas.score;
-      if (sc) {
-        var showScore = scoreOn && !!state.masks.score && sc.maskId === state.masks.score;
-        var b = s.boost || {}, spec = state.hud === "on" ? state.spectated : [];
-        var lh = spec.slice(0, 4).some(Boolean), rh = spec.slice(4, 8).some(Boolean);
-        sc.hl.to(lh ? 1 : 0, b.fade, now);
-        sc.dim.to(rh ? 1 : 0, b.fade, now);
-        sc.canvas.classList.toggle("on", showScore);
-        if (showScore) {
-          var l = sc.hl.value(now), r = sc.dim.value(now), k2 = [sc.maskId, l.toFixed(3), r.toFixed(3), lookVersion].join("|");
-          if (k2 !== sc.drawn) { drawScore(sc, l, r, s); sc.drawn = k2; }
-        }
-      }
-      buildTitle();
-      showTitle();
+      build();
+      var o = look.overlay || {}, on = state.hud === "on", up = state.hud !== "off";
+      $("plates").classList.toggle("on", on && o.plates !== false);
+      $("logos").classList.toggle("on", up && o.logos !== false);
+      $("pips").classList.toggle("on", up && o.pips !== false);
+      $("sponsor").classList.toggle("on", sponsors(now) && on && o.sponsor !== false);
+      window.renderCam(state, look, on && o.cam !== false && look.cams !== false);
     }
     requestAnimationFrame(frame);
   }
@@ -400,13 +158,12 @@
     var es = new EventSource("/api/stream");
     es.onmessage = function (ev) {
       var msg = JSON.parse(ev.data);
-      if (msg.look) { look = msg.look; lookVersion++; }
-      Object.keys(msg.mask_data || {}).forEach(function (k) { loadMask(k, msg.mask_data[k]); });
+      if (msg.look) look = msg.look;
       state = msg;
       window.codHud = { state: state, look: look };   // (for checking the overlay)
     };
     // The app has closed or restarted: show nothing until it's back.
-    es.onerror = function () { state = { hud: "off", rows: [], spectated: [], masks: {} }; };
+    es.onerror = function () { state = { hud: "off" }; };
   }
 
   connect();

@@ -47,7 +47,8 @@ def smoke_test(port):
     import time
     results, ok = [], True
     for path in ("/control", "/overlay", "/api/state", "/api/log", "/api/fonts", "/api/logos", "/fonts/Inter.ttf",
-                 "/fonts/BebasNeue.ttf", "/assets/icon-white.ico", "/assets/demo/game.png", "/assets/title/map_labels.png"):
+                 "/fonts/BebasNeue.ttf", "/assets/icon-white.ico", "/assets/demo/game.png", "/assets/overlay/box-left.png",
+                 "/assets/overlay/box-right.png", "/cams.js"):
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as r:
                 results.append(f"OK   {path} ({len(r.read())} bytes)")
@@ -69,6 +70,20 @@ def smoke_test(port):
     except Exception as e:
         ok = False
         results.append(f"FAIL demo match: {e}")
+    # Windows text recognition reading the demo screenshot's names (a warning
+    # only: the build PC may not have the language for it).
+    try:
+        from PIL import Image
+        from .capture import to_reference
+        from .config import DEFAULTS
+        from .names import DEMO_NAMES, WindowsOcr, read_cell
+        from .demo import ScreenshotDemo
+        ocr, frame = WindowsOcr(), to_reference(Image.open(ScreenshotDemo.PATH))
+        got = [read_cell(frame, box, ocr) for box in DEFAULTS["names"]["rows"]] + [read_cell(frame, DEFAULTS["names"]["card"], ocr)]
+        right = sum(a == b for a, b in zip(got, DEMO_NAMES + [DEMO_NAMES[3]]))
+        results.append(("OK  " if right >= 7 else "WARN") + f" names read {right}/9: {', '.join(got)}")
+    except Exception as e:
+        results.append(f"WARN names not read: {e!r}")
     try:
         import webview  # noqa: F401
         if sys.platform == "win32":

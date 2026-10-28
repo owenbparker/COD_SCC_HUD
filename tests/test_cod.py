@@ -11,10 +11,8 @@ import numpy as np
 
 from codhud import detect
 from codhud.capture import normalise_title, to_reference
-from codhud.config import DEFAULTS, Config, from_suite, set_path
+from codhud.config import DEFAULTS, Config, set_path
 from codhud.demo import DemoGame
-
-SUITE = os.path.join(os.path.dirname(__file__), "fixtures", "cod_scoreboard_suite_config.json")
 
 
 def demo_frame(**changes):
@@ -48,51 +46,102 @@ class DetectorTests(unittest.TestCase):
         d.feed("on", 2.0)
         self.assertEqual(d.feed("on", 2.0 + detect.HUD_GAIN_CONFIRM), "on")
 
-    def test_rows_and_spectated(self):
+    def test_spectated(self):
         frame, m = demo_frame(dead={0, 6}, objective={3, 5}, spectated=2)
-        rows = detect.row_states(frame, DEFAULTS)
-        self.assertEqual(rows, ["dim", "normal", "normal", "bright", "normal", "bright", "dim", "normal"])
         self.assertEqual(detect.spectated(frame, DEFAULTS), [i == 2 for i in range(8)])
         frame, _ = demo_frame(spectated=6, dead=set(), objective=set())
         self.assertEqual(detect.spectated(frame, DEFAULTS), [i == 6 for i in range(8)])
-        self.assertEqual(detect.row_states(frame, DEFAULTS), ["normal"] * 8)
-
-    def test_masks_cover_background_not_text(self):
-        frame, _ = demo_frame(spectated=1)
-        masks = detect.row_masks(frame, DEFAULTS)
-        self.assertEqual(masks[0].shape, (32, 610))
-        # Row 1: mostly background, but its name's letters aren't.
-        self.assertGreater((masks[0] == 255).mean(), 0.7)
-        self.assertLess((masks[0] == 255).mean(), 0.99)
-        # The spectated row is filled with the game's highlight: no glow on it.
-        self.assertLess((masks[1][:, 60:] == 255).mean(), 0.05)
-        score = detect.score_mask(frame, DEFAULTS)
-        self.assertEqual(score.shape, (179, 474))
-        # The team logo area is always covered; the clock's digits aren't.
-        self.assertTrue((score[30:130, 6:86] == 255).all())
-        digits = detect.crop(frame, 930, 62, 60, 30)
-        self.assertTrue((digits.max(axis=-1) > 200).any())
-        self.assertLess(score[42:72, 207:267].min(), 255)
 
     def test_real_screenshot(self):
-        """The demo's screenshot of the CoD caster HUD (BO7): HUD up, the bomb
-        carrier's and the spectated player's icon cells lit, BigR3aL spectated."""
+        """The demo's screenshot of the CoD caster HUD (BO7): HUD up, BigR3aL spectated."""
         from codhud.demo import ScreenshotDemo
         shown, hidden = ScreenshotDemo().frames()
         self.assertEqual(detect.hud_reading(shown, DEFAULTS)[0], "on")
         self.assertEqual(detect.hud_reading(hidden, DEFAULTS)[0], "off")
-        self.assertEqual(detect.row_states(shown, DEFAULTS), ["normal", "bright", "normal", "bright"] + ["normal"] * 4)
         self.assertEqual(detect.spectated(shown, DEFAULTS), [i == 3 for i in range(8)])
-        masks = detect.row_masks(shown, DEFAULTS)
-        self.assertEqual(masks[3].max(), 0)               # the spectated row: no glow
-        self.assertGreater((masks[0] == 255).mean(), 0.8)
 
-    def test_colour_mask_feather(self):
-        region = np.array([[[0x14, 0x15, 0x1B], [0x14 + 5, 0x15, 0x1B], [0x14 + 40, 0x15, 0x1B]]], dtype=np.uint8)
-        m = detect.colour_mask(region, [{"hex": "#14151B", "tolerance": 1}], 15)
-        self.assertEqual(m[0, 0], 255)
-        self.assertTrue(0 < m[0, 1] < 255)
-        self.assertEqual(m[0, 2], 0)
+    def test_name_cells(self):
+        """Each name cell, made black on white for the text recognition: the
+        name's ink is there (light on dark, dark on a light highlight, and the
+        player card's coloured name), and nothing else is."""
+        from PIL import Image
+        from codhud.demo import ScreenshotDemo
+        from codhud.names import ink
+        shown, _ = ScreenshotDemo().frames()
+        for box in DEFAULTS["names"]["rows"] + [DEFAULTS["names"]["card"]]:
+            cell = np.asarray(ink(detect.crop(shown, box["x"], box["y"], box["w"], box["h"]), scale=1))
+            dark = (cell < 128).mean()
+            self.assertTrue(0.015 < dark < 0.3, (box, dark))
+        # (the CDL screenshot: dark on light green for the spectated row)
+        cdl = os.path.join(os.path.dirname(__file__), "fixtures", "cdl-top.png")
+        if os.path.exists(cdl):
+            canvas = Image.new("RGB", (1920, 1080))
+            canvas.paste(Image.open(cdl).convert("RGB"))
+            frame = np.asarray(canvas)
+            box = DEFAULTS["names"]["rows"][5]
+            cell = np.asarray(ink(detect.crop(frame, box["x"], box["y"], box["w"], box["h"]), scale=1))
+            self.assertTrue(0.015 < (cell < 128).mean() < 0.3)
+
+    def test_names(self):
+        from codhud.names import best_match, clean_name, same_player
+        self.assertEqual(clean_name("6 SHOTZZY"), "SHOTZZY")
+        self.assertEqual(clean_name(" Last__Stand "), "Last__Stand")
+        self.assertTrue(same_player("Psych9delic", "Psych9de1ic"))
+        self.assertTrue(same_player("OpTic Shotzzy", "Shotzzy"))
+        self.assertFalse(same_player("HUKE", "Dashy"))
+        self.assertEqual(best_match("BigR3al", ["Zett7abyte", "Last__Stand", "Fri_9thalix", "BigR3aL"]), 3)
+        self.assertIsNone(best_match("Nobody", ["Zett7abyte", ""]))
+
+    def test_name_reader_settles(self):
+        """A row's name only changes once the new name is read twice."""
+        from codhud.names import NameReader
+        reader = NameReader()
+        reads = iter([["A"] * 8, ["B"] * 8, ["A"] * 8, ["B"] * 8, ["B"] * 8, [""] * 8])
+
+        class Ocr:
+            pass
+        reader._ocr = Ocr()
+        import codhud.names as names
+        old = names.read_cell
+        try:
+            current = {}
+            names.read_cell = lambda frame, box, ocr: current["row"][0] if box is not DEFAULTS["names"]["card"] else "card"
+            seen = []
+            for got in reads:
+                current["row"] = got
+                reader.read(None, DEFAULTS)
+                seen.append(reader.names[0])
+            self.assertEqual(seen, ["A", "A", "A", "A", "B", "B"])
+        finally:
+            names.read_cell = old
+
+    def test_spectated_row(self):
+        from codhud.scanner import spectated_row
+        names = ["a", "b", "c", "d", "Huke", "Shotzzy", "Mercules", "Dashy"]
+        self.assertEqual(spectated_row([i == 2 for i in range(8)], names, ""), 2)
+        # No row lit (or two): the player card's name says.
+        self.assertEqual(spectated_row([False] * 8, names, "SHOTZZY"), 5)
+        self.assertEqual(spectated_row([False] * 8, names, ""), -1)
+
+    def test_cams_match_players(self):
+        from codhud.cams import CamHub, clean_cam_name, match_players
+        self.assertEqual(clean_cam_name(" Shotzzy#1234567 "), "Shotzzy")
+        with self.assertRaises(ValueError):
+            clean_cam_name("  ")
+        players = [{"team": "right", "slot": 2, "name": "SHOTZZY", "also": []},
+                   {"team": "left", "slot": 4, "name": "BigR3aL", "also": ["Scrap", "BigR3aL"]},
+                   {"team": "left", "slot": 1, "name": "Zett7abyte", "also": []}]
+        got = match_players(["Shotzzy", "Scrap", "someone"], players)
+        self.assertEqual(got["Shotzzy"]["slot"], 2)
+        self.assertEqual((got["Scrap"]["team"], got["Scrap"]["slot"]), ("left", 4))    # (by the roster link)
+        self.assertNotIn("someone", got)
+        # Picked by hand wins.
+        got = match_players(["Shotzzy", "someone"], players, {"Zett7abyte": "someone"})
+        self.assertEqual(got["someone"]["slot"], 1)
+        hub = CamHub()
+        hub.poll("cam1", "Scrap", "C615", wait=0)
+        pubs = hub.publishers(players)
+        self.assertEqual((pubs[0]["riot_id"], pubs[0]["player"]["name"]), ("Scrap", "BigR3aL"))
 
     def test_frames_scaled_to_1080p(self):
         frame, _ = demo_frame()
@@ -107,28 +156,29 @@ class DetectorTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
-    def test_import_suite(self):
-        with open(SUITE, encoding="utf-8") as f:
-            suite = json.load(f)
-        cfg = from_suite(suite)
-        self.assertEqual(cfg["detector"]["pixel1"], {"x": 960, "y": 57, "color": "#23252D", "tolerance": 1})
-        self.assertTrue(cfg["detector"]["score_box_only"])
-        self.assertEqual(cfg["highlights"]["boxes"][4], {"x": 1267, "y": 97, "w": 610, "h": 32, "enabled": True})
-        self.assertEqual(cfg["highlights"]["color_right"], "#771116")
-        self.assertEqual(cfg["highlights"]["fade"], 0.15)
-        self.assertEqual(cfg["scorebox"]["overrides"][2], {"x": 723, "y": 15, "w": 474, "h": 31, "enabled": True})
-        self.assertEqual(cfg["scorebox"]["boost"]["lightness_left"], 10.0)
-        self.assertEqual(cfg["spectated"]["pixels"][5], {"x": 1664, "y": 145, "enabled": True})
-        self.assertEqual(normalise_title(cfg["capture"]["window_title"]), "call of duty")
-        self.assertEqual(cfg["capture"]["screen"], 0)
-        # The defaults are the Suite's settings already.
-        for section in ("detector", "highlights", "scorebox", "spectated"):
-            self.assertEqual(cfg[section], DEFAULTS[section], section)
+    def test_old_settings_dropped(self):
+        """A config.json from an older build (the glow, gradient and BO7 title)
+        keeps what still applies and drops the rest."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"highlights": {"opacity": 0.3}, "scorebox": {}, "title": {"maps": True},
+                           "detector": {"enabled": False},
+                           "match": {"left": {"name": "FUEL", "record": "SEASON RECORD"}, "maps": [], "map_count": 7,
+                                     "best_of": 7}}, f)
+            cfg = Config(path).get()
+            self.assertNotIn("highlights", cfg)
+            self.assertNotIn("title", cfg)
+            self.assertFalse(cfg["detector"]["enabled"])
+            self.assertEqual(cfg["match"]["left"]["name"], "FUEL")
+            self.assertNotIn("record", cfg["match"]["left"])
+            self.assertNotIn("maps", cfg["match"])
+            self.assertEqual(cfg["match"]["best_of"], 7)
 
     def test_set_path(self):
-        cfg = set_path(DEFAULTS, "highlights.boxes.2.w", 500)
-        self.assertEqual(cfg["highlights"]["boxes"][2]["w"], 500)
-        self.assertEqual(DEFAULTS["highlights"]["boxes"][2]["w"], 610)
+        cfg = set_path(DEFAULTS, "names.rows.2.w", 500)
+        self.assertEqual(cfg["names"]["rows"][2]["w"], 500)
+        self.assertEqual(DEFAULTS["names"]["rows"][2]["w"], 338)
 
 
 class ServerTests(unittest.TestCase):
@@ -138,6 +188,7 @@ class ServerTests(unittest.TestCase):
             cfg = Config(os.path.join(tmp, "config.json"))
             cfg.update({"http_port": 8795})
             app = HudApp(cfg, demo=True)
+            app.scanner.names.available = lambda: False   # (the demo's names, on any PC)
             app.updater.check_in_background = lambda: None
             start(app)
             base = "http://127.0.0.1:8795"
@@ -158,32 +209,45 @@ class ServerTests(unittest.TestCase):
                     line = stream.readline()
                 msg = json.loads(line[5:])
                 self.assertEqual(msg["hud"], "on")
-                self.assertEqual(set(msg["mask_data"]), {"score"} | {f"row{i}" for i in range(8)})
-                self.assertTrue(msg["mask_data"]["score"]["png"].startswith("data:image/png;base64,"))
-                self.assertIn("highlights", msg["look"])
+                self.assertIn("overlay", msg["look"])
+                self.assertEqual(msg["cams"], [])
                 # A change of look reaches the overlay.
-                post("/api/config", {"path": "highlights.opacity", "value": 0.4})
+                post("/api/config", {"path": "overlay.sponsor", "value": False})
                 deadline = time.time() + 5
                 while time.time() < deadline:
                     line = stream.readline()
                     if line.startswith(b"data:") and "look" in json.loads(line[5:]):
                         break
-                self.assertEqual(json.loads(line[5:])["look"]["highlights"]["opacity"], 0.4)
+                self.assertFalse(json.loads(line[5:])["look"]["overlay"]["sponsor"])
+                # The demo's names, and who's spectated.
+                deadline = time.time() + 5
+                while time.time() < deadline and not app.hub.state["names"][3]:
+                    time.sleep(0.05)
+                self.assertEqual(app.hub.state["names"][3], "BigR3aL")
+                self.assertEqual(app.hub.state["spec"], 3)
                 stream.close()
-                self.assertEqual(cfg.get()["highlights"]["opacity"], 0.4)
-                with open(SUITE, encoding="utf-8") as f:
-                    post("/api/import", json.load(f))
-                self.assertEqual(cfg.get()["highlights"]["opacity"], 0.25)
-                post("/api/reset", {"section": "scorebox"})
-                # Swap sides: the teams, their maps won and their colours.
-                post("/api/config", {"changes": {"match": {"left": {"name": "FUEL", "wins": 2}, "right": {"name": "SAINTS"},
-                                                           "maps": [{"name": "A", "winner": "left"}, {"name": "B", "winner": ""}]},
-                                                 "highlights": {"color_left": "#111111", "color_right": "#222222"}}})
-                c = post("/api/swap", {})["config"]
-                self.assertEqual((c["match"]["left"]["name"], c["match"]["right"]["name"], c["match"]["right"]["wins"]),
-                                 ("SAINTS", "FUEL", 2))
-                self.assertEqual([x["winner"] for x in c["match"]["maps"][:2]], ["right", ""])
-                self.assertEqual((c["highlights"]["color_left"], c["highlights"]["color_right"]), ("#222222", "#111111"))
+                self.assertFalse(cfg.get()["overlay"]["sponsor"])
+                post("/api/reset", {"section": "overlay"})
+                self.assertTrue(cfg.get()["overlay"]["sponsor"])
+                # Swap sides: names, short names, logos, colours and series scores.
+                post("/api/match", {"changes": {"left": {"name": "FUEL", "wins": 2, "color": "#111111"},
+                                                "right": {"name": "SAINTS", "wins": 1, "color": "#222222"}}})
+                c = post("/api/swap", {})["config"]["match"]
+                self.assertEqual((c["left"]["name"], c["right"]["name"], c["left"]["wins"], c["right"]["wins"]),
+                                 ("SAINTS", "FUEL", 1, 2))
+                self.assertEqual((c["left"]["color"], c["right"]["color"]), ("#222222", "#111111"))
+                self.assertEqual(c["left"]["logo"], "assets/logos/st-clair-saints.png")
+                # A cam picked by hand for a player.
+                post("/api/cams/assign", {"name": "BigR3aL", "cam": "Scrap"})
+                self.assertEqual(cfg.get()["cams"]["assign"], {"BigR3aL": "Scrap"})
+                post("/api/cams/assign", {"name": "BigR3aL", "cam": ""})
+                self.assertEqual(cfg.get()["cams"]["assign"], {})
+                # A player cam connecting (as the Player Cam app does).
+                r = post("/api/cam/poll", {"id": "cam1", "riot_id": "BigR3aL", "label": "C615", "wait": 0})
+                self.assertEqual(r["player"]["slot"], 4)
+                self.assertEqual(r["player"]["team_name"], "SAINTS")
+                cams = post("/api/cam/list", {})
+                self.assertEqual((cams["game"], cams["cams"][0]["name"]), ("cod", "BigR3aL"))
                 with self.assertRaises(urllib.error.HTTPError):
                     post("/api/reset", {"section": "nope"})
                 self.assertIn("assets/logos/st-clair-saints.png", json.loads(urllib.request.urlopen(base + "/api/logos").read())["logos"])
@@ -220,7 +284,7 @@ class EngineLinkTests(unittest.TestCase):
 
         png = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
                             "1f15c4890000000d49444154789c63f8cf000000030101005a4d5b3c0000000049454e44ae426082")
-        ingests = []
+        ingests, globals_set, state = [], [], {"right_score": 2}
 
         class Engine(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -240,8 +304,9 @@ class EngineLinkTests(unittest.TestCase):
                     self._send({"app": "scc-gfx-engine", "name": "Test"})
                 elif self.path == "/api/global":
                     self._send({"global": {
-                        "left": {"name": "OPTIC TEXAS", "short": "OPTX", "logo_url": f"http://127.0.0.1:{port}/logo.png"},
-                        "right": {"name": "ATLANTA FAZE", "short": "ATL"}}})
+                        "left": {"name": "OPTIC TEXAS", "short": "OPTX", "score": 1, "logo_url": f"http://127.0.0.1:{port}/logo.png"},
+                        "right": {"name": "ATLANTA FAZE", "short": "ATL", "score": state["right_score"]}, "best_of": 7,
+                        "sponsors": [{"logo": "sponsors/logo.png", "secs": 8, "logo_url": f"http://127.0.0.1:{port}/logo.png"}]}})
                 elif self.path == "/logo.png":
                     self._send(png, "image/png")
                 else:
@@ -252,6 +317,9 @@ class EngineLinkTests(unittest.TestCase):
                 if self.path == "/api/ingest":
                     ingests.append(json.loads(body))
                     self._send({"ok": True, "global": {}})
+                elif self.path == "/api/global":
+                    globals_set.append(json.loads(body)["global"])
+                    self._send({"global": {}})
                 else:
                     self.send_error(404)
 
@@ -262,8 +330,9 @@ class EngineLinkTests(unittest.TestCase):
             old = appmod.LOGO_DIR
             appmod.LOGO_DIR = os.path.join(tmp, "logos")
             cfg = Config(os.path.join(tmp, "config.json"))
-            cfg.update({"http_port": 8796})
+            cfg.update({"http_port": 8796, "global": {"follow": False}})
             app = HudApp(cfg, demo=True)
+            app.scanner.names.available = lambda: False
             app.updater.check_in_background = lambda: None
             start(app)
             base = "http://127.0.0.1:8796"
@@ -288,16 +357,33 @@ class EngineLinkTests(unittest.TestCase):
                 self.assertEqual(sent["series"]["right"]["name"], "ST. CLAIR SAINTS")
                 self.assertEqual(sent["series"]["best_of"], 5)
                 self.assertEqual(sent["fields"]["left_name"], "FUEL ESPORTS")
-                self.assertEqual(sent["fields"]["map_name"], "COLOSSUS")
-                self.assertEqual(sent["fields"]["map_mode"], "HARDPOINT")
+                deadline = time.time() + 10
+                while time.time() < deadline and not ingests[-1]["fields"].get("spectated_name"):
+                    time.sleep(0.05)
+                self.assertEqual(ingests[-1]["fields"]["left_p4_ign"], "BigR3aL")
+                self.assertEqual(ingests[-1]["fields"]["spectated_name"], "BigR3aL")
 
                 reply = post("/api/engine/use-global")
                 self.assertIn("OPTIC TEXAS", reply["summary"])
                 match = cfg.get()["match"]
                 self.assertEqual((match["left"]["name"], match["left"]["tricode"]), ("OPTIC TEXAS", "OPTX"))
                 self.assertEqual((match["right"]["name"], match["right"]["tricode"]), ("ATLANTA FAZE", "ATL"))
+                self.assertEqual((match["left"]["wins"], match["right"]["wins"], match["best_of"]), (1, 2, 7))
                 self.assertEqual(match["left"]["logo"], "logos/engine-OPTX.png")
-                self.assertEqual(match["right"]["logo"], "assets/logos/st-clair-saints.png")
+                self.assertEqual(match["right"]["logo"], "")    # (the engine's team has none)
+                self.assertEqual(cfg.get()["sponsors"]["logos"], [{"src": "logos/sponsor-1-logo.png", "secs": 8}])
+                # Following the engine: a change there shows here.
+                cfg.update({"global": {"follow": True}})
+                state["right_score"] = 3
+                deadline = time.time() + 10
+                while time.time() < deadline and cfg.get()["match"]["right"]["wins"] != 3:
+                    time.sleep(0.05)
+                self.assertEqual(cfg.get()["match"]["right"]["wins"], 3)
+                # Swap sides swaps the engine's Global information too.
+                post("/api/swap")
+                self.assertEqual(globals_set[-1]["left"]["name"], "ATLANTA FAZE")
+                self.assertEqual(globals_set[-1]["right"]["short"], "OPTX")
+                self.assertEqual(cfg.get()["match"]["left"]["wins"], 3)
                 with open(os.path.join(tmp, "logos", "engine-OPTX.png"), "rb") as f:
                     self.assertEqual(f.read(), png)
                 self.assertEqual(urllib.request.urlopen(base + "/logos/engine-OPTX.png", timeout=5).read(), png)
