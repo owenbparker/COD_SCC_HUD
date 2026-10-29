@@ -32,7 +32,7 @@
   .plate.right { left: 1266px; top: 16px; width: 612px; height: 53px; background-image: url("assets/overlay/box-right.png"); }
   .name { position: absolute; top: 0; height: 100%; display: flex; align-items: center; color: #fff; white-space: nowrap;
           font-family: var(--f-name); font-size: 46px; font-weight: 800; text-transform: uppercase; letter-spacing: -.005em; line-height: 1; }
-  .name span { display: block; transform: translateY(.03em); }
+  .name span { display: block; flex: none; transform: translateY(.03em); }
   .plate.left .name { left: 242px; width: 359px; justify-content: flex-end; }
   .plate.right .name { left: 10px; width: 359px; }
   /* The score box: a dark backing over the game's logo, the team's logo on it. */
@@ -86,15 +86,24 @@
   function box(cls, x, y, w, h, inner) {
     return '<div class="' + cls + '" style="left:' + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + 'px">' + (inner || "") + "</div>";
   }
-  // A long team name shrinks to fit its box.
+  // A long team name shrinks to fit its box. Checked again every half second
+  // as well, since the name's font can finish loading (or change) later.
   function fit() {
     Array.prototype.forEach.call(document.querySelectorAll(".name"), function (el) {
-      var span = el.firstChild, size = 46;
+      var span = el.firstChild, lo = 14, hi = 46;
       if (!span) return;
       span.style.fontSize = "";
-      while (span.scrollWidth > el.clientWidth && size > 14) { size -= 1; span.style.fontSize = size + "px"; }
+      if (span.scrollWidth <= el.clientWidth) return;
+      while (hi - lo > 0.5) {
+        var mid = (lo + hi) / 2;
+        span.style.fontSize = mid + "px";
+        if (span.scrollWidth <= el.clientWidth) lo = mid; else hi = mid;
+      }
+      span.style.fontSize = lo + "px";
     });
   }
+  var fittedAt = 0;
+  if (document.fonts) document.fonts.addEventListener("loadingdone", fit);
 
   function build() {
     var m = look.match, key = JSON.stringify([m, look.fonts]);
@@ -144,6 +153,7 @@
   function frame(now) {
     if (look) {
       build();
+      if (now - fittedAt > 500) { fittedAt = now; fit(); }
       var o = look.overlay || {}, on = state.hud === "on", up = state.hud !== "off";
       $("plates").classList.toggle("on", on && o.plates !== false);
       $("logos").classList.toggle("on", up && o.logos !== false);
