@@ -550,10 +550,13 @@ def make_handler(app):
                     app.config.set("cams.assign", assign)
                     app.changed_config()
                 elif path == "/api/reset":
-                    section = body.get("section")
-                    if section not in DEFAULTS or not isinstance(DEFAULTS[section], dict):
+                    section = str(body.get("section") or "")   # ("overlay.layout": a part of one)
+                    default = DEFAULTS
+                    for k in section.split("."):
+                        default = default.get(k) if isinstance(default, dict) else None
+                    if not isinstance(default, dict):
                         raise ValueError(f"no settings called {section!r}")
-                    app.config.set(section, DEFAULTS[section])
+                    app.config.set(section, default)
                     app.changed_config()
                     log(f"Reset the {section} settings")
                 elif path == "/api/logo":

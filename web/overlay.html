@@ -36,13 +36,13 @@
   .plate.left .name { left: 242px; width: 359px; justify-content: flex-end; }
   .plate.right .name { left: 10px; width: 359px; }
   /* The score box: a dark backing over the game's logo, the team's logo on it. */
-  .mini-bg { background: #131519; }
+  .mini-bg { background: #14151B; }
   /* The series score, over the game's pips. */
   .pip-cover { background: #14151B; }
   .pip { position: absolute; top: 28px; width: 11px; height: 11px; background: #4e4f55; }
   .pip.won { background: var(--won, #fff); }
-  .best-of { position: absolute; left: 899px; top: 20px; width: 122px; height: 27px; background: #23252D; color: #fff;
-             display: flex; align-items: center; justify-content: center; font: 500 19px "SCC fallback", sans-serif; letter-spacing: .02em; }
+  .best-of { position: absolute; background: #23252D; color: #fff;
+             display: flex; align-items: center; justify-content: center; font: 500 16px "SCC fallback", sans-serif; letter-spacing: .02em; }
   /* The webcam: CDL's place, left of the game's player card. */
   #cam { left: 1238px; top: 896px; width: 175px; height: 130px; background: #0c0d10; overflow: hidden;
          transform: translateX(12px); transition: opacity .25s ease, transform .35s cubic-bezier(.2, .8, .2, 1); }
@@ -106,7 +106,7 @@
   if (document.fonts) document.fonts.addEventListener("loadingdone", fit);
 
   function build() {
-    var m = look.match, key = JSON.stringify([m, look.fonts]);
+    var m = look.match, key = JSON.stringify([m, look.fonts, (look.overlay || {}).layout]);
     if (key === builtKey) return;
     builtKey = key;
     var fam = String((look.fonts || {}).name || "").replace(/["\\]/g, "");
@@ -117,9 +117,12 @@
     $("plates").innerHTML =
       '<div class="clip plate left">' + img(L.logo, 9 + 28.5, -58.5, 193, 193) + '<div class="name"><span>' + esc(L.name) + "</span></div></div>" +
       '<div class="clip plate right">' + img(R.logo, 364 + 28.5, -53.5, 193, 193) + '<div class="name"><span>' + esc(R.name) + "</span></div></div>";
-    // The score box's logos, over the game's.
-    $("logos").innerHTML = box("abs mini-bg", 734, 55, 67, 93) + box("abs mini-bg", 1116, 55, 68, 93) +
-      img(L.logo, 734, 64, 75, 75) + img(R.logo, 1109, 64, 75, 75);
+    // The score box's logos, on covers over the game's (the right side mirrors the left about the middle).
+    var lay = Object.assign({ cover_x: 734, cover_top: 37, cover_w: 70, cover_h: 70, logo_size: 62, logo_y: 41,
+                              best_of_w: 104, best_of_h: 17, best_of_y: 20, best_of_text: 13 }, (look.overlay || {}).layout);
+    var cx = +lay.cover_x, cw = +lay.cover_w, rx = 1920 - cx - cw, ls = +lay.logo_size, lx = cx + (cw - ls) / 2;
+    $("logos").innerHTML = box("abs mini-bg", cx, lay.cover_top, cw, lay.cover_h) + box("abs mini-bg", rx, lay.cover_top, cw, lay.cover_h) +
+      img(L.logo, lx, lay.logo_y, ls, ls) + img(R.logo, 1920 - lx - ls, lay.logo_y, ls, ls);
     // The series score: a pip per map needed to win, inner ones first.
     var need = Math.min(5, Math.max(1, Math.ceil((Number(m.best_of) || 1) / 2)));
     // (the game's own, up to 5 a side, covered)
@@ -129,7 +132,9 @@
       pips += '<div class="pip' + ((R.wins || 0) > k ? " won" : "") + '" style="left:' + (1042 + 17 * k) + "px;--won:" + esc(R.color || "#fff") + '"></div>';
     }
     // ("BEST OF n" too, so it says the same as the pips)
-    $("pips").innerHTML = pips + '<div class="best-of">BEST OF ' + esc(m.best_of) + "</div>";
+    var bw = +lay.best_of_w;
+    $("pips").innerHTML = pips + '<div class="best-of" style="left:' + (960 - bw / 2) + "px;top:" + lay.best_of_y + "px;width:" + bw +
+      "px;height:" + lay.best_of_h + "px;font-size:" + lay.best_of_text + 'px">BEST OF ' + esc(m.best_of) + "</div>";
     fit();
     if (document.fonts) document.fonts.ready.then(fit);
   }

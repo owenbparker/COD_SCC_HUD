@@ -182,6 +182,18 @@
       <label class="toggle"><input type="checkbox" data-k="overlay.cam"> Webcam</label>
       <label class="toggle"><input type="checkbox" data-k="overlay.sponsor"> Sponsors</label>
     </div>
+    <h3>Score box <button class="reset" data-reset="overlay.layout">Reset</button></h3>
+    <p class="note" style="margin-top:0">In 1920×1080 pixels. The covers hide the game's own logos and the team logos sit on them; the right side mirrors the left. Click the preview to read a pixel's position.</p>
+    <table class="cal">
+      <tr><th></th><th>X</th><th>Top</th><th>Width</th><th>Height</th><th>Text</th></tr>
+      <tr><td>Logo covers</td><td><input type="number" data-k="overlay.layout.cover_x"></td><td><input type="number" data-k="overlay.layout.cover_top"></td>
+          <td><input type="number" data-k="overlay.layout.cover_w"></td><td><input type="number" data-k="overlay.layout.cover_h"></td><td></td></tr>
+      <tr><td>Logos</td><td></td><td><input type="number" data-k="overlay.layout.logo_y"></td>
+          <td><input type="number" data-k="overlay.layout.logo_size" title="Width and height"></td><td></td><td></td></tr>
+      <tr><td>BEST OF box</td><td></td><td><input type="number" data-k="overlay.layout.best_of_y"></td>
+          <td><input type="number" data-k="overlay.layout.best_of_w"></td><td><input type="number" data-k="overlay.layout.best_of_h"></td>
+          <td><input type="number" data-k="overlay.layout.best_of_text"></td></tr>
+    </table>
     <h3>Sponsors</h3>
     <div class="sponsor-strip" id="sponsors"></div>
     <p class="note">The sponsors come from the GFX Engine's Global information (Global &gt; Sponsors), one after another for their seconds, in CDL's place under the middle of the screen.</p>

@@ -89,7 +89,14 @@ DEFAULTS = {
     # box, the series score in place of the game's pips, the spectated
     # player's webcam beside their player card and the sponsors under the
     # middle of the screen (where CDL has them).
-    "overlay": {"plates": True, "logos": True, "pips": True, "cam": True, "sponsor": True},
+    "overlay": {"plates": True, "logos": True, "pips": True, "cam": True, "sponsor": True,
+                # The score box (1920x1080 pixels, placed on the live CDL caster
+                # HUD): the covers over the game's logos (x is the left one's;
+                # the right one mirrors it), the team logos on them (where the
+                # game's are), and the "BEST OF n" box above the game's clock.
+                "layout": {"cover_x": 734, "cover_top": 37, "cover_w": 70, "cover_h": 70,
+                           "logo_size": 62, "logo_y": 41,
+                           "best_of_w": 104, "best_of_h": 17, "best_of_y": 20, "best_of_text": 13}},
     # The team names' font (installed on this PC, sent to the overlay so it
     # shows on any PC; Inter when it isn't installed).
     "fonts": {"name": "Gotham"},
