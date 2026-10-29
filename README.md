@@ -12,7 +12,12 @@ CoD caster HUD, laid out as on CDL broadcasts:
   mode, with their in-game name).
 - **Sponsors**, one after another, under the middle of the screen.
 - **Auto hide**: everything disappears when the CoD caster HUD goes off
-  screen (killcams, menus, between maps), and comes back with it.
+  screen (killcams, menus, between maps, the caster HUD turned off, the game
+  closed or minimised), and comes back with it.
+- **Show HUD on screen** (top of the control panel): the overlay in a
+  see-through window over the whole screen, on top of the game, without
+  vMix or OBS. Clicks go through it to the game. Run Call of Duty in
+  Windowed Fullscreen or Windowed (exclusive Fullscreen covers it).
 
 The teams, logos, colours, series score and sponsors follow the SCC GFX
 Engine's Global information (GFX Engine page). **Swap sides** (Match &

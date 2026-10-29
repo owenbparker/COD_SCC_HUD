@@ -133,6 +133,10 @@
   <h1>SCC CoD HUD</h1>
   <div class="status"><span class="dot" id="dot"></span><span id="status-text">Starting…</span></div>
   <div class="spacer"></div>
+  <div class="seg" id="ow" hidden title="Draws the overlay in a see-through window over the whole screen, on top of Call of Duty. Clicks go through it to the game. It hides with the CoD caster HUD, like the browser source. Run the game in Windowed Fullscreen or Windowed (not Fullscreen).">
+    <button id="ow-btn">Show HUD on screen</button>
+    <select id="ow-screen" title="Which screen the HUD covers" style="width:auto;border:0;border-left:1px solid var(--line);border-radius:0"></select>
+  </div>
   <div class="seg" id="mode"><button data-demo="0">Live game</button><button data-demo="1">Demo</button></div>
   <span class="version" id="version"></span>
   <button id="update" class="update" hidden></button>
@@ -212,15 +216,17 @@
   <section data-page="calibration">
     <h2>Auto hide <button class="reset" data-reset="detector">Reset</button></h2>
     <label class="toggle"><input type="checkbox" data-k="detector.enabled"> Only show while the CoD caster HUD is on screen</label>
-    <p class="note">Told by two pixels of the CoD caster HUD: one in the score box and one in the right team's scoreboard. Click the preview to read any pixel.</p>
+    <p class="note">Told by pixels of the CoD caster HUD: one in the score box and one in each team's scoreboard. When they don't match (killcams, menus, the caster HUD turned off, the game window closed or minimised) the whole overlay disappears. Click the preview to read any pixel.</p>
     <table class="cal">
       <tr><th></th><th>X</th><th>Y</th><th>Colour</th><th>Tol.</th></tr>
       <tr><td>Score box</td><td><input type="number" data-k="detector.pixel1.x"></td><td><input type="number" data-k="detector.pixel1.y"></td>
           <td><input type="text" data-k="detector.pixel1.color"></td><td><input type="number" data-k="detector.pixel1.tolerance"></td></tr>
-      <tr><td>Scoreboard</td><td><input type="number" data-k="detector.pixel2.x"></td><td><input type="number" data-k="detector.pixel2.y"></td>
+      <tr><td>Right scoreboard</td><td><input type="number" data-k="detector.pixel2.x"></td><td><input type="number" data-k="detector.pixel2.y"></td>
           <td><input type="text" data-k="detector.pixel2.color"></td><td><input type="number" data-k="detector.pixel2.tolerance"></td></tr>
+      <tr><td>Left scoreboard</td><td><input type="number" data-k="detector.pixel3.x"></td><td><input type="number" data-k="detector.pixel3.y"></td>
+          <td><input type="text" data-k="detector.pixel3.color"></td><td><input type="number" data-k="detector.pixel3.tolerance"></td></tr>
     </table>
-    <label class="toggle"><input type="checkbox" data-k="detector.pixel2.enabled"> Check the scoreboard pixel too</label>
+    <label class="toggle"><input type="checkbox" data-k="detector.pixel2.enabled"> Check the scoreboard pixels too</label>
     <label class="toggle"><input type="checkbox" data-k="detector.score_box_only"> Score box up without the scoreboards: keep the score box logos and series</label>
   </section>
 
@@ -328,7 +334,13 @@
       if (el.type === "checkbox") el.checked = !!value;
       else el.value = value == null ? "" : value;
     });
-    $$("#capture-mode button").forEach(function (b) { b.classList.toggle("on", cfg.capture.mode === b.dataset.mode); });
+    $("#ow-btn").onclick = function () {
+    post("/api/overlay-window", { open: !info.overlay_window.open }).then(function (d) { info = d; renderInfo(); });
+  };
+  $("#ow-screen").onchange = function () {
+    post("/api/overlay-window", { open: info.overlay_window.open, screen: Number(this.value) }).then(function (d) { info = d; renderInfo(); });
+  };
+  $$("#capture-mode button").forEach(function (b) { b.classList.toggle("on", cfg.capture.mode === b.dataset.mode); });
   }
 
   // The calibration table: each row's name cell and spectated pixel.
@@ -505,6 +517,16 @@
     $("#dot").className = "dot" + (s.hud === "on" ? " on" : s.hud === "score" ? " part" : "");
     $("#status-text").textContent = (s.demo ? "Demo · " : "") + "HUD " + HUD[s.hud].toLowerCase() + " · " + s.status;
     $$("#mode button").forEach(function (b) { b.classList.toggle("on", (b.dataset.demo === "1") === s.demo); });
+    var ow = info.overlay_window || {};
+    $("#ow").hidden = !ow.available;
+    if (ow.available) {
+      $("#ow-btn").classList.toggle("on", ow.open);
+      $("#ow-btn").textContent = ow.open ? "HUD on screen: on" : "Show HUD on screen";
+      var opts = ow.screens.map(function (label, i) { return '<option value="' + i + '">' + label + "</option>"; }).join("");
+      if ($("#ow-screen").dataset.opts !== opts) { $("#ow-screen").innerHTML = opts; $("#ow-screen").dataset.opts = opts; }
+      $("#ow-screen").hidden = ow.screens.length < 2;
+      if (document.activeElement !== $("#ow-screen")) $("#ow-screen").value = String(ow.screen);
+    }
     $("#r-source").textContent = s.status + (s.fps ? " · " + s.fps + " reads/s" : "");
     $("#r-hud").textContent = HUD[s.hud] + (s.raw !== s.hud ? " (changing)" : "") + (cfg.detector.enabled ? "" : " · auto hide is off");
     var p = info.players[s.spec];
@@ -517,7 +539,7 @@
       var got = c[i];
       return '<span class="sw" style="background:' + (got || "transparent") + '"></span>' + (got || "–") + " (want " + pp.color + ")";
     }
-    $("#r-pixels").innerHTML = "Score box " + px(0, d.pixel1) + (d.pixel2.enabled ? " · Scoreboard " + px(1, d.pixel2) : "");
+    $("#r-pixels").innerHTML = "Score box " + px(0, d.pixel1) + (d.pixel2.enabled ? " · Scoreboards " + px(1, d.pixel2) + " " + px(2, d.pixel3) : "");
     var port = info.port;
     $("#url-local").textContent = "http://localhost:" + port + "/overlay";
     $("#lan-box").hidden = !info.lan_url;
@@ -583,6 +605,12 @@
   $$("#mode button").forEach(function (b) {
     b.onclick = function () { post("/api/demo", { on: b.dataset.demo === "1" }).then(function (d) { info = d; renderInfo(); }); };
   });
+  $("#ow-btn").onclick = function () {
+    post("/api/overlay-window", { open: !info.overlay_window.open }).then(function (d) { info = d; renderInfo(); });
+  };
+  $("#ow-screen").onchange = function () {
+    post("/api/overlay-window", { open: info.overlay_window.open, screen: Number(this.value) }).then(function (d) { info = d; renderInfo(); });
+  };
   $$("#capture-mode button").forEach(function (b) {
     b.onclick = function () { save("capture.mode", b.dataset.mode, true); fillFields(document); };
   });

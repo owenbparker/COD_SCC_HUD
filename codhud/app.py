@@ -33,6 +33,7 @@ class HudApp:
         self.config = config
         self.hub = Hub()
         self.scanner = Scanner(config, self.hub, demo=demo)
+        self.overlay_window = None   # the desktop app's "Show HUD on screen" window
         self.cams = CamHub()   # player webcams (SCC Player Cam, Call of Duty mode)
         self.updater = Updater()
         self.server = None
@@ -190,6 +191,7 @@ class HudApp:
         lan = lan_ip() if cfg.get("allow_network") else None
         return {"config": cfg, "defaults": DEFAULTS, "scanner": self.scanner.info(), "update": self.updater.info(),
                 "players": self.players(), "cams": self.publishers(),
+                "overlay_window": self.overlay_window.info() if self.overlay_window else {"available": False},
                 "port": port, "lan_url": f"http://{lan}:{port}" if lan else None, "data_dir": DATA_DIR}
 
     def look(self):
@@ -560,6 +562,10 @@ def make_handler(app):
                         app.changed_match({body["team"]: {"logo": logo}})
                 elif path == "/api/demo":
                     app.scanner.set_demo(bool(body.get("on")))
+                elif path == "/api/overlay-window":
+                    if not app.overlay_window:
+                        raise ValueError("Show HUD on screen needs the Windows desktop app")
+                    app.overlay_window.set(bool(body.get("open")), body.get("screen"))
                 elif path == "/api/network":
                     app.set_network(bool(body.get("on")))
                 elif path == "/api/update/check":

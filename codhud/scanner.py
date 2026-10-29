@@ -64,7 +64,7 @@ class Scanner:
         self.frame = None
         self.status = "Starting"
         self.raw = "off"
-        self.colours = [None, None]
+        self.colours = [None, None, None]
         self.fps = 0.0
         self._stop = threading.Event()
         self._thread = None
@@ -121,7 +121,7 @@ class Scanner:
         self._set_status(status)
         self.frame = frame
         if frame is None:
-            raw, self.colours = "off", [None, None]
+            raw, self.colours = "off", [None, None, None]
         elif cfg["detector"].get("enabled", True):
             raw, self.colours = detect.hud_reading(frame, cfg)
         else:

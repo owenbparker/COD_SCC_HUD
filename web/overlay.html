@@ -176,6 +176,18 @@
     es.onerror = function () { state = { hud: "off" }; };
   }
 
+  // ?fit=1 (Show HUD on screen): the 1920x1080 overlay scaled to the window,
+  // centred, for any screen size.
+  if (new URLSearchParams(location.search).get("fit") === "1") {
+    var fitPage = function () {
+      var k = Math.min(innerHeight / 1080, innerWidth / 1920), root = document.documentElement.style;
+      root.transformOrigin = "0 0";
+      root.transform = "translate(" + (innerWidth - 1920 * k) / 2 + "px," + (innerHeight - 1080 * k) / 2 + "px) scale(" + k + ")";
+    };
+    addEventListener("resize", fitPage);
+    fitPage();
+  }
+
   connect();
   requestAnimationFrame(frame);
 })();

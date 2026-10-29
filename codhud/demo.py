@@ -135,6 +135,7 @@ class ScreenshotDemo:
     PATH = os.path.join(WEB_DIR, "assets", "demo", "game.png")
 
     def __init__(self):
+        self.hides = True   # (off in the build's HUD window check)
         self._t0 = None
         self._frames = None
 
@@ -152,4 +153,4 @@ class ScreenshotDemo:
         if self._t0 is None:
             self._t0 = now
         shown, hidden = self.frames()
-        return (hidden if 34 <= (now - self._t0) % 40 < 37 else shown), "Demo (a CoD caster HUD screenshot)"
+        return (hidden if self.hides and 34 <= (now - self._t0) % 40 < 37 else shown), "Demo (a CoD caster HUD screenshot)"

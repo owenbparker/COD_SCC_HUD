@@ -43,6 +43,8 @@ DEFAULTS = {
     # PC) and connect their player cams. Settings can still only be changed
     # on this PC.
     "allow_network": False,
+    # Which screen "Show HUD on screen" covers (0 = the main one).
+    "overlay_screen": 0,
 
     # Where the game's picture comes from. "window": the Call of Duty window
     # itself (read even while other windows cover it); "screen": a whole
@@ -52,12 +54,14 @@ DEFAULTS = {
                 "poll_ms": 33},
 
     # Auto hide: the overlay only shows while the CoD caster HUD is on
-    # screen, told by two pixels of it. Pixel 1 is in the score box at the
-    # top; pixel 2 in the right team's panel. With score_box_only, pixel 1
-    # alone (the panels away) still shows the score box parts.
+    # screen, told by pixels of it. Pixel 1 is in the score box at the top;
+    # pixels 2 and 3 in the right and left teams' panels (pixel2.enabled
+    # switches both). With score_box_only, pixel 1 alone (the panels away)
+    # still shows the score box parts.
     "detector": {"enabled": True,
                  "pixel1": {"x": 960, "y": 57, "color": "#23252D", "tolerance": 1},
                  "pixel2": {"enabled": True, "x": 1500, "y": 80, "color": "#333540", "tolerance": 1},
+                 "pixel3": {"x": 420, "y": 80, "color": "#333540", "tolerance": 1},
                  "score_box_only": True},
 
     # Who's being spectated: their scoreboard row turns from idle_color to the

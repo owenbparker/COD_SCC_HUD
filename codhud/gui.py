@@ -108,6 +108,7 @@ def main():
     add_arguments(parser)
     parser.add_argument("--debug", action="store_true", help="allow right-click > Inspect in the window")
     parser.add_argument("--smoke-test", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--overlay-test", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     app = build_app(args)
@@ -128,13 +129,34 @@ def main():
         app.stop()
         return 0 if ok else 1
 
+    if args.overlay_test:
+        import webview
+        from .overlay_window import self_test
+        app.scanner.game.hides = False   # (the demo's killcam would hide the HUD mid-check)
+        result = {}
+        holder = webview.create_window("overlay-test", html="", hidden=True)
+
+        def run():
+            try:
+                result["ok"] = self_test(port, DATA_DIR)
+            finally:
+                holder.destroy()
+        webview.start(run)
+        app.stop()
+        return 0 if result.get("ok") else 1
+
     url = f"http://127.0.0.1:{port}/control"
     stop_theme = threading.Event()
     try:
         import webview
+        from .overlay_window import OverlayWindow
         window_title = f"{TITLE} {app.updater.current}"
         window = webview.create_window(window_title, url, width=1280, height=760,
                                        min_size=(960, 600), background_color="#0e1012", text_select=True)
+        if own_server:
+            app.overlay_window = OverlayWindow(app.config, port)
+            # Closing the control panel closes the HUD window too.
+            window.events.closed += app.overlay_window.close
         # The skull in white on a dark taskbar / title bar, black on a light one.
         theme.update_shortcut_icon()
         theme.follow_theme(window_title, stop_theme)

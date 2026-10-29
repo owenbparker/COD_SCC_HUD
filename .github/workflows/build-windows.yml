@@ -57,6 +57,39 @@ jobs:
           Remove-Item "$app\smoke-test.txt", "$app\config.json" -ErrorAction SilentlyContinue
           Remove-Item "$app\_update" -Recurse -ErrorAction SilentlyContinue
 
+      - name: Check the Show HUD on screen window (see-through and click-through)
+        # Puts a red window on screen with the HUD window over it, then checks
+        # the red shows through, the HUD is drawn and clicks pass through.
+        # Run in Windows' light and dark mode (dark mode adds a backdrop).
+        timeout-minutes: 8
+        shell: pwsh
+        run: |
+          $app = "dist\CodHUD"
+          $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+          New-Item $key -Force | Out-Null
+          New-Item overlay-test -ItemType Directory -Force | Out-Null
+          $failed = @()
+          foreach ($theme in @(@{ name = "light"; v = 1 }, @{ name = "dark"; v = 0 })) {
+            Set-ItemProperty $key AppsUseLightTheme $theme.v -Type DWord
+            Set-ItemProperty $key SystemUsesLightTheme $theme.v -Type DWord
+            $p = Start-Process "$app\CodHUD.exe" -ArgumentList '--overlay-test', '--demo', '--port', '8796' -PassThru
+            if (-not $p.WaitForExit(150000)) { $p.Kill(); Write-Host "Timed out" }
+            Get-ChildItem "$app\overlay-test*" | ForEach-Object { Move-Item $_.FullName "overlay-test\$($theme.name)-$($_.Name)" -Force }
+            Write-Host "--- $($theme.name) mode"
+            Get-Content "overlay-test\$($theme.name)-overlay-test.txt" -ErrorAction SilentlyContinue
+            if ($p.ExitCode -ne 0) { $failed += $theme.name }
+          }
+          Set-ItemProperty $key AppsUseLightTheme 1 -Type DWord
+          Remove-Item "$app\config.json" -ErrorAction SilentlyContinue
+          Remove-Item "$app\output", "$app\_update" -Recurse -ErrorAction SilentlyContinue
+          if ($failed) { throw "HUD window check failed in $($failed -join ', ') mode" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: overlay-test
+          path: overlay-test
+
       - name: Add readme and version.txt
         shell: pwsh
         run: |

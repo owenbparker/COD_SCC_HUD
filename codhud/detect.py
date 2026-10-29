@@ -54,24 +54,23 @@ def matches(rgb, colour, tolerance):
 
 def hud_reading(frame, cfg):
     """The detector's raw reading: "on" (the HUD is up), "score" (only the
-    score box is up, when score_box_only is set) or "off"; with the two
-    pixels' colours."""
+    score box is up, when score_box_only is set) or "off"; with the
+    pixels' colours (score box, right scoreboard, left scoreboard)."""
     d = cfg["detector"]
-    p1, p2 = d["pixel1"], d["pixel2"]
+    p1 = d["pixel1"]
+    boards = [d["pixel2"], d["pixel3"]]
     rgb1 = pixel(frame, p1["x"], p1["y"])
     one = matches(rgb1, hex_rgb(p1["color"]), float(p1["tolerance"]))
-    rgb2 = None
-    two = True
-    if p2.get("enabled", True):
-        rgb2 = pixel(frame, p2["x"], p2["y"])
-        two = matches(rgb2, hex_rgb(p2["color"]), float(p2["tolerance"]))
+    check = d["pixel2"].get("enabled", True)   # (one switch for both scoreboards)
+    rgbs = [pixel(frame, p["x"], p["y"]) if check else None for p in boards]
+    two = not check or all(matches(c, hex_rgb(p["color"]), float(p["tolerance"])) for c, p in zip(rgbs, boards))
     if one and two:
         state = "on"
-    elif one and p2.get("enabled", True) and d.get("score_box_only"):
+    elif one and check and d.get("score_box_only"):
         state = "score"
     else:
         state = "off"
-    return state, [rgb_hex(c) if c else None for c in (rgb1, rgb2)]
+    return state, [rgb_hex(c) if c else None for c in [rgb1] + rgbs]
 
 
 class HudDebounce:
