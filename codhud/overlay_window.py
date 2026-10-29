@@ -220,10 +220,10 @@ class OverlayWindow:
 
 
 # Where the self-test expects the HUD to be drawn, and to be see-through
-# (fractions of the screen): the name plates and "BEST OF", and empty parts
-# of the screen.
-HUD_POINTS = [(300 / 1920, 43 / 1080), (1600 / 1920, 43 / 1080), (960 / 1920, 33 / 1080)]
-EMPTY_POINTS = [(0.5, 0.6), (0.3, 0.75), (0.7, 0.5), (0.5, 0.45), (0.1, 0.3)]
+# (overlay pixels, 1920x1080): the name plates and a logo cover, and empty
+# parts of the screen.
+HUD_POINTS = [(300, 43), (1600, 43), (769, 72)]
+EMPTY_POINTS = [(960, 650), (576, 810), (1344, 540), (960, 486), (192, 324)]
 
 
 def self_test(port, out_dir):
@@ -268,8 +268,11 @@ def self_test(port, out_dir):
         shot.save(os.path.join(out_dir, f"overlay-test-{name}.png"))
         sx, sy = shot.size[0] / w, shot.size[1] / h
 
-        def px(fx, fy):
-            return shot.getpixel((int(fx * w * sx), int(fy * h * sy)))[:3]
+        def px(ox, oy):
+            # (the overlay is scaled to the screen and centred, as in overlay.html's ?fit=1)
+            k = min(w / 1920, h / 1080)
+            fx, fy = (w - 1920 * k) / 2 + ox * k, (h - 1080 * k) / 2 + oy * k
+            return shot.getpixel((int(fx * sx), int(fy * sy)))[:3]
 
         def red(p):
             return p[0] > 200 and p[1] < 60 and p[2] < 60
