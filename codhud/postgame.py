@@ -217,8 +217,15 @@ def read_words(frame, box, ocr):
     """Text in a box (x0, y0, x1, y1) with Windows' text recognition, words in order."""
     from .names import ink
     x0, y0, x1, y1 = box
-    words = sorted(ocr.words(ink(frame[y0:y1, x0:x1])), key=lambda w: (round(w[2] / 30), w[1]))
-    return " ".join(t for t, _, _ in words).strip()
+    cell = frame[y0:y1, x0:x1]
+    text = " ".join(t for t, _, _ in sorted(ocr.words(ink(cell)), key=lambda w: w[1])).strip()
+    if not text:
+        # (a short name in a wide cell can go unread: again, cut to the text and bigger)
+        light = np.where(_gray(cell) - float(np.median(_gray(cell))) > 70)
+        if len(light[1]):
+            cx0, cx1 = max(0, int(light[1].min()) - 10), min(cell.shape[1], int(light[1].max()) + 11)
+            text = " ".join(t for t, _, _ in sorted(ocr.words(ink(cell[:, cx0:cx1], scale=4)), key=lambda w: w[1])).strip()
+    return text
 
 
 def read(frame, ocr=None):
