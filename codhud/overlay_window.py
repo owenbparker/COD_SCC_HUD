@@ -266,13 +266,20 @@ def self_test(port, out_dir):
         time.sleep(8)
         shot = ImageGrab.grab(all_screens=False)
         shot.save(os.path.join(out_dir, f"overlay-test-{name}.png"))
-        sx, sy = shot.size[0] / w, shot.size[1] / h
+
+        # The page's own size and place: the window can come out a little
+        # smaller than the screen, and the overlay is scaled to it and centred
+        # (overlay.html's ?fit=1).
+        try:
+            iw, ih, wx, wy, dpr = ov.window.evaluate_js("[innerWidth, innerHeight, screenX, screenY, devicePixelRatio]")
+        except Exception as e:
+            results.append(f"{name}: page size not read ({e!r}), taking the whole screen")
+            iw, ih, wx, wy, dpr = w, h, 0, 0, 1
 
         def px(ox, oy):
-            # (the overlay is scaled to the screen and centred, as in overlay.html's ?fit=1)
-            k = min(w / 1920, h / 1080)
-            fx, fy = (w - 1920 * k) / 2 + ox * k, (h - 1080 * k) / 2 + oy * k
-            return shot.getpixel((int(fx * sx), int(fy * sy)))[:3]
+            k = min(iw / 1920, ih / 1080)
+            fx, fy = wx + (iw - 1920 * k) / 2 + ox * k, wy + (ih - 1080 * k) / 2 + oy * k
+            return shot.getpixel((min(int(fx * dpr), shot.size[0] - 1), min(int(fy * dpr), shot.size[1] - 1)))[:3]
 
         def red(p):
             return p[0] > 200 and p[1] < 60 and p[2] < 60
@@ -290,7 +297,7 @@ def self_test(port, out_dir):
         time.sleep(1)
         after = bg.evaluate_js("window.clicks||0")
         passed = after > before
-        results.append(f"{name}: see-through={see_through} {empty} hud-drawn={drawn} {hud} click-passes={passed}")
+        results.append(f"{name}: page {iw}x{ih} at {wx},{wy} (x{dpr}) see-through={see_through} {empty} hud-drawn={drawn} {hud} click-passes={passed}")
         if see_through and drawn and passed and name != "without-fix":
             passed_methods.append(name)
         ov.close()
