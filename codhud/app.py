@@ -14,7 +14,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import detect, fonts
+from . import detect, fonts, postgame
 from .cams import CamHub
 from .config import DATA_DIR, DEFAULTS, LOGO_DIR, WEB_DIR
 from .enginelink import EngineLink, _get, _post, save_logo_bytes
@@ -47,6 +47,7 @@ class HudApp:
         self.engine = EngineLink("CoD HUD", "cod", self._engine_snapshot, self._engine_apply_global,
                                  load=lambda: self.config.get().get("gfx_engine"),
                                  save=lambda d: self.config.update({"gfx_engine": d}), log=log)
+        self.scanner.postgame.on_read = self.engine.send_now   # (the post-game stats go at once)
 
     def stop(self):
         self._stop.set()
@@ -112,15 +113,65 @@ class HudApp:
         out = []
         for i, name in enumerate(names[:8]):
             side = "left" if i < 4 else "right"
-            members = (self.roster.get(side) or {}).get("members") or []
-            linked = None
-            if name:
-                # (as the engine matches them; else allowing for a misread letter)
-                linked = next((m for m in members if m.get("ign") and ign_key(m["ign"]) == ign_key(name)), None) or \
-                    next((m for m in members if m.get("ign") and same_player(ign_key(m["ign"]), name)), None)
+            linked = self.linked(side, name)
             out.append({"team": side, "slot": i % 4 + 1, "name": name, "linked": linked,
                         "also": [x for x in ((linked or {}).get("name"), (linked or {}).get("ign")) if x]})
         return out
+
+    def linked(self, side, name):
+        """The roster player of the side's team with that in-game name, or None."""
+        members = (self.roster.get(side) or {}).get("members") or []
+        if not name:
+            return None
+        # (as the engine matches them; else allowing for a misread letter)
+        return next((m for m in members if m.get("ign") and ign_key(m["ign"]) == ign_key(name)), None) or \
+            next((m for m in members if m.get("ign") and same_player(ign_key(m["ign"]), name)), None)
+
+    # --- the post-game stats ---------------------------------------------------------
+
+    def read_screenshot(self, data_url):
+        """A screenshot of the end-of-game scoreboard (a data: URL) read into the post-game stats."""
+        m = re.fullmatch(r"data:image/[\w.+-]+;base64,(.+)", data_url or "", re.S)
+        if not m:
+            raise ValueError("send the screenshot as a picture (PNG or JPG)")
+        frame = postgame.load_picture(base64.b64decode(m.group(1)))
+        self.read_postgame(frame, "a screenshot")
+
+    def read_postgame(self, frame, source):
+        names = self.scanner.names
+        got = postgame.read(frame, names._ocr if names.available() else None)
+        if got is None:
+            raise ValueError("no end-of-game scoreboard found in that picture")
+        self.scanner.postgame.take(postgame.assign(got, self.config.get()["match"], names.info()["names"]), source)
+
+    def clear_postgame(self):
+        """No post-game stats: here, and on the GFX Engine (its kept stats too)."""
+        self.scanner.postgame.clear()
+        if self.engine.connected and self.engine.url:
+            try:
+                _post(self.engine.url + "/api/stats/clear", {}, 5)
+            except Exception as e:
+                log(f"Couldn't clear the stats on the GFX Engine: {getattr(e, 'reason', e)}", "warn")
+        self.engine.send_now()
+
+    def postgame_fields(self):
+        """The post-game stats as the GFX Engine's fields ({} when there are
+        none, or the next game has started)."""
+        result = self.scanner.postgame.info()["result"]
+        if not result or result.get("stale"):
+            return {}
+        fields = {"postgame": 1, "stats_final": 1}
+        for side in ("left", "right"):
+            team = result[side]
+            fields[f"{side}_game_name"] = team["name"]
+            for n in range(1, 6):
+                p = team["players"][n - 1] if n <= len(team["players"]) else {}
+                key = f"{side}_p{n}"
+                fields[f"{key}_ign"] = p.get("name") or ""
+                fields[f"{key}_name"] = (self.linked(side, p.get("name")) or {}).get("name") or p.get("name") or ""
+                for stat in postgame.STATS:
+                    fields[f"{key}_{stat}"] = p.get(stat) if p.get(stat) is not None else ""
+        return fields
 
     def publishers(self):
         return self.cams.publishers(self.players(), self.config.get()["cams"].get("assign"))
@@ -192,7 +243,8 @@ class HudApp:
         return {"config": cfg, "defaults": DEFAULTS, "scanner": self.scanner.info(), "update": self.updater.info(),
                 "players": self.players(), "cams": self.publishers(),
                 "overlay_window": self.overlay_window.info() if self.overlay_window else {"available": False},
-                "port": port, "lan_url": f"http://{lan}:{port}" if lan else None, "data_dir": DATA_DIR}
+                "port": port, "lan_url": f"http://{lan}:{port}" if lan else None, "data_dir": DATA_DIR,
+                "engine_connected": bool(self.engine.connected)}
 
     def look(self):
         """What the overlay needs of the settings."""
@@ -238,6 +290,8 @@ class HudApp:
         for p in players:
             fields[f"{p['team']}_p{p['slot']}_ign"] = p["name"]
             fields[f"{p['team']}_p{p['slot']}_name"] = (p["linked"] or {}).get("name") or p["name"]
+        # The last game's stats (team and player stats), until the next game starts.
+        fields.update(self.postgame_fields())
         state = self.hub.state
         row = state.get("spec", -1)
         spec = players[row] if 0 <= row < len(players) else None
@@ -535,6 +589,18 @@ def make_handler(app):
                     app.swap_sides()
                 elif path == "/api/names/clear":
                     app.scanner.names.clear()
+                elif path == "/api/postgame/screenshot":
+                    app.read_screenshot(body.get("data"))
+                elif path == "/api/postgame/read":
+                    # The game's picture now (the end-of-game scoreboard on screen).
+                    if app.scanner.frame is None:
+                        raise ValueError("no game picture yet")
+                    app.read_postgame(app.scanner.frame, "the game")
+                elif path == "/api/postgame/clear":
+                    app.clear_postgame()
+                elif path == "/api/postgame/swap":
+                    app.scanner.postgame.swap()
+                    app.engine.send_now()
                 elif path == "/api/players/link":
                     # Save IGN to player: {"side", "player" (roster index), "ign"}
                     return self._json(app.player_links({"side": body.get("side"), "player": body.get("player"),

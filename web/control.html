@@ -122,6 +122,14 @@
   .camlist .c { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
   .camlist .c span { color: var(--muted); font-size: 12px; }
   .swatch-row { display: flex; gap: 8px; align-items: center; }
+  .pg { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+  .pg th { text-align: right; color: var(--muted); font-weight: 500; font-size: 11px; padding: 4px 8px; }
+  .pg td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .pg th:first-child, .pg td:first-child { text-align: left; }
+  .pg tr.team td { border-bottom: 2px solid var(--tc, #555); font-weight: 600; padding-top: 12px; }
+  .pg td small { color: var(--muted); font-weight: 400; }
+  .drop { border: 1px dashed var(--line); border-radius: 6px; padding: 14px; text-align: center; color: var(--muted); font-size: 13px; margin-top: 10px; cursor: pointer; }
+  .drop.over { border-color: var(--accent); color: var(--text); }
   .sponsor-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
   .sponsor-strip img { width: 96px; height: 44px; object-fit: contain; background: #2e2c2a; border-radius: 4px; padding: 4px; }
 </style>
@@ -206,6 +214,16 @@
     <p class="note" id="players-note"></p>
   </section>
 
+  <section class="wide" data-page="stats">
+    <h2>Post-game stats <span><button class="reset" id="pg-swap" title="The two teams' stats change sides">⇄ Swap teams</button> <button class="reset" id="pg-clear" title="Forget these stats, here and on the GFX Engine">Clear</button></span></h2>
+    <label class="toggle"><input type="checkbox" data-k="postgame.enabled"> Read the end-of-game scoreboard when it comes up</label>
+    <p class="note" id="pg-status"></p>
+    <table class="pg" id="pg-table"></table>
+    <div class="drop" id="pg-drop">Drop, paste (Ctrl+V) or click to pick a screenshot of the end-of-game scoreboard</div>
+    <input type="file" id="pg-file" accept="image/*" hidden>
+    <p class="note">Kills, deaths, assists and damage (and non-traded kills and highest streak) go to the GFX Engine's Team stats and Player stats, each team on its side (told by the teams' names, else the players'). They're kept there after the next game starts. Players' names need Windows' text recognition; without it they're named from the in-game scoreboards.</p>
+  </section>
+
   <section class="wide" data-page="cams">
     <h2>Webcams</h2>
     <label class="toggle"><input type="checkbox" data-k="cams.enabled"> Show the spectated player's webcam</label>
@@ -281,7 +299,7 @@
 </aside>
 </div>
 
-<script>window.SHELL = {"app": "CoD HUD", "logo": "assets/logo-white.png", "pages": [{"id": "overview", "label": "Overview"}, {"id": "editor", "label": "HUD Editor"}, {"id": "teams", "label": "Match & Teams", "group": "Event setup"}, {"id": "players", "label": "Players", "icon": "teams", "group": "Event setup"}, {"id": "live", "label": "Live Game", "group": "Live game"}, {"id": "cams", "label": "Webcams", "icon": "cams", "group": "Live game"}, {"id": "calibration", "label": "Calibration", "icon": "settings", "group": "Live game"}, {"id": "engine", "label": "GFX Engine", "icon": "engine", "group": "Connections"}]};</script>
+<script>window.SHELL = {"app": "CoD HUD", "logo": "assets/logo-white.png", "pages": [{"id": "overview", "label": "Overview"}, {"id": "editor", "label": "HUD Editor"}, {"id": "teams", "label": "Match & Teams", "group": "Event setup"}, {"id": "players", "label": "Players", "icon": "teams", "group": "Event setup"}, {"id": "live", "label": "Live Game", "group": "Live game"}, {"id": "cams", "label": "Webcams", "icon": "cams", "group": "Live game"}, {"id": "stats", "label": "Post-game Stats", "icon": "data", "group": "Live game"}, {"id": "calibration", "label": "Calibration", "icon": "settings", "group": "Live game"}, {"id": "engine", "label": "GFX Engine", "icon": "engine", "group": "Connections"}]};</script>
 <script src="enginelink.js"></script>
 <script src="shell.js"></script>
 <script src="update.js"></script>
@@ -493,6 +511,47 @@
       renderPlayers();
     }).catch(function () {});
   }
+  // --- post-game stats ------------------------------------------------------------
+  function renderPostgame() {
+    var pg = info.scanner.postgame || {}, r = pg.result;
+    $("#pg-status").textContent = (pg.status || "") + (r && r.stale ? "" : r ? " · sent to the GFX Engine" + (info.engine_connected ? "" : " when it's connected") : "");
+    if (!r) { $("#pg-table").innerHTML = ""; return; }
+    var html = "<tr><th>Player</th><th>K</th><th>D</th><th>A</th><th>DMG</th><th>K/D</th><th>Non-traded</th><th>Streak</th></tr>";
+    ["left", "right"].forEach(function (side) {
+      var t = r[side], m = cfg.match[side];
+      html += '<tr class="team" style="--tc:' + esc(m.color || "#555") + '"><td colspan="8">' + esc(m.name || side) +
+        (t.name && t.name.toLowerCase() !== String(m.name || "").toLowerCase() ? " <small>(in game: " + esc(t.name) + ")</small>" : "") + "</td></tr>";
+      t.players.forEach(function (p) {
+        html += "<tr><td>" + esc(p.name || "?") + "</td><td>" + p.kills + "</td><td>" + p.deaths + "</td><td>" + p.assists + "</td><td>" +
+          Number(p.damage).toLocaleString() + "</td><td>" + (p.deaths ? (p.kills / p.deaths).toFixed(2) : p.kills.toFixed(2)) + "</td><td>" +
+          (p.ntk == null ? "–" : p.ntk) + "</td><td>" + (p.streak == null ? "–" : p.streak) + "</td></tr>";
+      });
+    });
+    $("#pg-table").innerHTML = html;
+  }
+  function readShot(file) {
+    if (!file || !/^image\//.test(file.type)) return;
+    var fr = new FileReader();
+    $("#pg-drop").textContent = "Reading…";
+    fr.onload = function () {
+      post("/api/postgame/screenshot", { data: fr.result }).then(function (d) { info = d; renderPostgame(); })
+        .catch(function () {}).then(function () { $("#pg-drop").textContent = "Drop, paste (Ctrl+V) or click to pick a screenshot of the end-of-game scoreboard"; });
+    };
+    fr.readAsDataURL(file);
+  }
+  $("#pg-drop").onclick = function () { $("#pg-file").click(); };
+  $("#pg-file").onchange = function () { readShot(this.files[0]); this.value = ""; };
+  $("#pg-drop").addEventListener("dragover", function (e) { e.preventDefault(); this.classList.add("over"); });
+  $("#pg-drop").addEventListener("dragleave", function () { this.classList.remove("over"); });
+  $("#pg-drop").addEventListener("drop", function (e) { e.preventDefault(); this.classList.remove("over"); readShot(e.dataTransfer.files[0]); });
+  document.addEventListener("paste", function (e) {
+    if (!$("#pg-drop").offsetParent) return;    // (only on the Post-game Stats page)
+    var item = Array.prototype.filter.call(e.clipboardData.items, function (i) { return /^image\//.test(i.type); })[0];
+    if (item) readShot(item.getAsFile());
+  });
+  $("#pg-clear").onclick = function () { post("/api/postgame/clear").then(function (d) { info = d; renderPostgame(); }); };
+  $("#pg-swap").onclick = function () { post("/api/postgame/swap").then(function (d) { info = d; renderPostgame(); }); };
+
   $("#names-clear").onclick = function () { post("/api/names/clear").then(function (d) { info = d; renderPlayers(); }); };
 
   // --- webcams ------------------------------------------------------------------------
@@ -552,6 +611,7 @@
       return '<span class="sw" style="background:' + (got || "transparent") + '"></span>' + (got || "–") + " (want " + pp.color + ")";
     }
     $("#r-pixels").innerHTML = "Score box " + px(0, d.pixel1) + (d.pixel2.enabled ? " · Scoreboards " + px(1, d.pixel2) + " " + px(2, d.pixel3) : "");
+    renderPostgame();
     var port = info.port;
     $("#url-local").textContent = "http://localhost:" + port + "/overlay";
     $("#lan-box").hidden = !info.lan_url;

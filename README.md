@@ -31,6 +31,14 @@ The webcam shown is the cam of the player whose row is highlighted (or
 whose name is on the player card): matched by their in-game name, the
 roster player it's linked to, or a cam picked by hand on the Webcams page.
 
+**Post-game stats**: when the end-of-game scoreboard comes up, each
+player's kills, deaths, assists and damage (and non-traded kills and
+highest streak) are read off it and sent to the GFX Engine's Team stats and
+Player stats, each team on its side (by the teams' names, else the
+players'). A screenshot of it can be dropped or pasted on the **Post-game
+Stats** page too. The numbers are read by matching the game's own digits
+(no setup); the names need Windows text recognition.
+
 ## Install
 
 Download **SCC-COD-HUD-Setup.exe** from the

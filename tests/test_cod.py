@@ -155,6 +155,64 @@ class DetectorTests(unittest.TestCase):
         self.assertIn(normalise_title("Call of Duty"), normalise_title(title))
 
 
+class PostgameTests(unittest.TestCase):
+    TRUTH = [[(17, 10, 6, 1866, 12, 6), (21, 11, 8, 2398, 16, 5), (11, 10, 6, 1805, 10, 4), (23, 4, 4, 2188, 21, 10)],
+             [(6, 19, 5, 1188, 2, 1), (10, 18, 1, 1038, 5, 2), (11, 18, 5, 1490, 6, 2), (7, 18, 3, 1262, 3, 2)]]
+    NAMES = [["JayK", "JWill", "AriseJJ", "A47"], ["ForfeitDesert61", "IceDagger", "HoT0wn", "Pointbreak"]]
+
+    def numbers(self, got):
+        return [[(p["kills"], p["deaths"], p["assists"], p["damage"], p["ntk"], p["streak"]) for p in t["players"]] for t in got["teams"]]
+
+    def test_reads_the_scoreboard(self):
+        from PIL import Image
+        from codhud import postgame
+        shot = Image.open(postgame.SAMPLE).convert("RGB")
+        self.assertEqual(self.numbers(postgame.read(to_reference(shot))), self.TRUTH)
+        # Played at other resolutions (the picture's scaled to 1080p), or a JPG.
+        import io
+        for size in ((1280, 720), (1366, 768), (1680, 1050), (2560, 1440), (3840, 2160)):
+            self.assertEqual(self.numbers(postgame.read(to_reference(shot.resize(size, Image.BILINEAR)))), self.TRUTH, size)
+        buf = io.BytesIO()
+        shot.save(buf, "JPEG", quality=60)
+        self.assertEqual(self.numbers(postgame.read(postgame.load_picture(buf.getvalue()))), self.TRUTH)
+        # Not the end-of-game scoreboard: the caster HUD, or nothing.
+        from codhud.demo import ScreenshotDemo
+        self.assertIsNone(postgame.read(to_reference(Image.open(ScreenshotDemo.PATH))))
+        self.assertIsNone(postgame.read(demo_frame()[0]))
+        self.assertIsNone(postgame.read(np.zeros((1080, 1920, 3), np.uint8)))
+
+    def test_sides(self):
+        from codhud.postgame import assign
+        teams = {"teams": [{"name": "ST. CLAIR COLLEGE", "players": [{"name": "JayK", "kills": 1}]},
+                           {"name": "BALDWIN W. UNIVERSITY", "players": [{"name": "", "kills": 2}]}]}
+        match = {"left": {"name": "Baldwin Wallace"}, "right": {"name": "St. Clair College"}}
+        live = ["", "", "", "", "Jayk", "", "", ""]
+        got = assign(teams, match, live)
+        self.assertEqual((got["right"]["players"][0]["kills"], got["left"]["players"][0]["kills"]), (1, 2))
+        # No team names: by the players' names (the in-game scoreboards: left team first).
+        match = {"left": {"name": ""}, "right": {"name": ""}}
+        teams["teams"][0]["name"] = teams["teams"][1]["name"] = ""
+        got = assign(teams, match, ["Ace", "", "", "", "JAYK", "", "", ""])
+        self.assertEqual(got["right"]["players"][0]["name"], "JayK")
+        self.assertEqual(got["left"]["players"][0]["name"], "Ace")   # (named from the scoreboard)
+        self.assertEqual(assign(teams, match, [""] * 8)["left"]["players"][0]["kills"], 1)   # (else top = left)
+
+    def test_names_with_text_recognition(self):
+        from PIL import Image
+        from codhud import postgame
+        from codhud.names import WindowsOcr, same_player
+        try:
+            ocr = WindowsOcr()
+        except Exception as e:
+            self.skipTest(f"no Windows text recognition: {e}")
+        got = postgame.read(to_reference(Image.open(postgame.SAMPLE)), ocr)
+        names = [[p["name"] for p in t["players"]] for t in got["teams"]]
+        print("\npost-game names read:", [t["name"] for t in got["teams"]], names)
+        right = sum(same_player(a, b) for want, have in zip(self.NAMES, names) for a, b in zip(want, have))
+        self.assertGreaterEqual(right, 6, names)
+        self.assertTrue(same_player(got["teams"][0]["name"], "ST. CLAIR COLLEGE") or "CLAIR" in got["teams"][0]["name"].upper())
+
+
 class ConfigTests(unittest.TestCase):
     def test_old_settings_dropped(self):
         """A config.json from an older build (the glow, gradient and BO7 title)
@@ -268,6 +326,24 @@ class ServerTests(unittest.TestCase):
                 self.assertEqual(frame[:2], b"\xff\xd8")
                 px = json.loads(urllib.request.urlopen(base + "/api/pixel?x=960&y=57", timeout=5).read())
                 self.assertEqual(px["hex"], "#23252D")
+                # A screenshot of the end-of-game scoreboard: its stats go to the GFX Engine.
+                import base64
+                from codhud.postgame import SAMPLE
+                with open(SAMPLE, "rb") as f:
+                    shot = "data:image/png;base64," + base64.b64encode(f.read()).decode()
+                r = post("/api/postgame/screenshot", {"data": shot})["scanner"]["postgame"]["result"]
+                self.assertEqual([p["kills"] for p in r["left"]["players"]], [17, 21, 11, 23])
+                fields = app._engine_snapshot()["fields"]
+                self.assertEqual((fields["postgame"], fields["left_p4_kills"], fields["left_p4_deaths"], fields["left_p4_assists"],
+                                  fields["left_p4_damage"], fields["right_p1_damage"], fields["right_p5_kills"]),
+                                 (1, 23, 4, 4, 2188, 1188, ""))
+                self.assertEqual(fields["left_p1_ign"], "Zett7abyte")   # (no text recognition: the in-game scoreboard's names)
+                post("/api/postgame/swap", {})
+                self.assertEqual(app._engine_snapshot()["fields"]["right_p4_kills"], 23)
+                post("/api/postgame/clear", {})
+                self.assertNotIn("postgame", app._engine_snapshot()["fields"])
+                with self.assertRaises(urllib.error.HTTPError):
+                    post("/api/postgame/screenshot", {"data": png})    # (not the scoreboard)
             finally:
                 app.stop()
 

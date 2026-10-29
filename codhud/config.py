@@ -110,6 +110,10 @@ DEFAULTS = {
     # a cam picked by hand on the Webcams page.
     "cams": {"enabled": True, "assign": {}},
 
+    # The post-game stats: read off the end-of-game scoreboard when it comes up
+    # (see codhud/postgame.py) and sent to the GFX Engine's team and player stats.
+    "postgame": {"enabled": True},
+
     # The SCC GFX Engine this HUD sends its match and series to (see codhud/enginelink.py).
     "gfx_engine": {"url": "", "name": "", "connected": False},
 }

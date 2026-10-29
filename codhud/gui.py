@@ -84,6 +84,27 @@ def smoke_test(port):
         results.append(("OK  " if right >= 7 else "WARN") + f" names read {right}/9: {', '.join(got)}")
     except Exception as e:
         results.append(f"WARN names not read: {e!r}")
+    # The end-of-game scoreboard (a real screenshot): the numbers must read;
+    # the names need Windows text recognition (a warning only).
+    try:
+        from PIL import Image
+        from .capture import to_reference
+        from . import postgame
+        try:
+            from .names import WindowsOcr
+            ocr = WindowsOcr()
+        except Exception:
+            ocr = None
+        got = postgame.read(to_reference(Image.open(postgame.SAMPLE)), ocr)
+        rows = [p for t in got["teams"] for p in t["players"]]
+        k = [p["kills"] for p in rows]
+        right = k == [17, 21, 11, 23, 6, 10, 11, 7] and [p["damage"] for p in rows][:2] == [1866, 2398]
+        ok = ok and right
+        results.append(("OK  " if right else "FAIL") + f" post-game stats read: kills {k}")
+        results.append(f"INFO post-game names: {[t['name'] for t in got['teams']]} {[p['name'] for p in rows]}")
+    except Exception as e:
+        ok = False
+        results.append(f"FAIL post-game stats: {e!r}")
     try:
         import webview  # noqa: F401
         if sys.platform == "win32":
