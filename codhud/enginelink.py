@@ -23,6 +23,13 @@ original, in hud-link/). A HUD makes one EngineLink with:
 
 and serves its routes (see handle()). While connected it sends the snapshot
 about once a second (at once when it changes, at least every 4 seconds).
+
+A HUD is paired with the one engine it connected to: it remembers that
+engine's ID and sends it with everything, so another engine on the network
+(one that got the old address, or a second engine on the same PC) turns it
+away rather than mixing two shows' data. When its engine moves to another
+address the HUD finds it again by its ID. The HUD has its own ID too, so an
+engine keeps one copy of each HUD and turns a second one away.
 """
 
 import concurrent.futures
@@ -31,7 +38,9 @@ import json
 import socket
 import threading
 import time
+import urllib.error
 import urllib.request
+import uuid
 
 APP = "scc-gfx-engine"
 PORT = 8782             # the engine's web port
@@ -47,8 +56,26 @@ def _get(url, timeout=3):
 
 def _post(url, body, timeout=3):
     req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"})
-    with _opener.open(req, timeout=timeout) as r:
-        return json.loads(r.read() or b"{}")
+    try:
+        with _opener.open(req, timeout=timeout) as r:
+            return json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:   # (the engine's {"error", "code"}, not just "Bad Request")
+        try:
+            reply = json.loads(e.read() or b"{}")
+        except ValueError:
+            reply = {}
+        if not reply.get("error"):
+            raise
+        return reply
+
+
+class Paired(ValueError):
+    """The engine at the address isn't the one this HUD is paired with
+    (code "wrong_engine"), or already has another copy of this HUD ("taken")."""
+
+    def __init__(self, msg, code):
+        super().__init__(msg)
+        self.code = code
 
 
 def own_addresses():
@@ -89,7 +116,7 @@ def normalise(url):
 
 
 def hello(url, timeout=2):
-    """The engine's {"app", "name", "version"} at url, or None."""
+    """The engine's {"app", "name", "version", "id"} at url, or None."""
     try:
         info = json.loads(_get(url + "/api/hello", timeout))
         return info if info.get("app") == APP else None
@@ -116,7 +143,8 @@ def _listen(seconds):
             continue
         if msg.get("app") == APP:
             port = int(msg.get("port") or PORT)
-            found[f"http://{ip}:{port}"] = {"name": str(msg.get("name") or ip)[:60], "version": str(msg.get("version") or "")}
+            found[f"http://{ip}:{port}"] = {"name": str(msg.get("name") or ip)[:60], "version": str(msg.get("version") or ""),
+                                            "id": str(msg.get("id") or "")}
     s.close()
     return found
 
@@ -141,15 +169,16 @@ def scan(port=PORT):
         open_ips = [ip for ip, ok in zip(candidates, pool.map(is_open, candidates)) if ok]
         hits = {f"http://{ip}:{port}": h for ip, h in zip(open_ips, pool.map(lambda ip: hello(f"http://{ip}:{port}"), open_ips)) if h}
     hits.update({u: h for u, h in listening.result().items() if u not in hits})
-    out, seen_local = [], False
-    for url, h in hits.items():
+    out, seen_local, seen_ids = [], False, set()
+    for url, h in sorted(hits.items(), key=lambda kv: not kv[0].startswith("http://127.0.0.1:")):
         ip = url.split("://", 1)[1].rsplit(":", 1)[0]
         local = ip == "127.0.0.1" or ip in mine
-        if local and seen_local:
-            continue   # the engine on this PC, found by two addresses
+        if (local and seen_local) or (h.get("id") and h["id"] in seen_ids):
+            continue   # the same engine, found by two addresses
         seen_local = seen_local or local
+        seen_ids.add(h.get("id") or url)
         out.append({"url": url, "name": h.get("name") or ip, "version": h.get("version", ""), "ip": ip,
-                    "this_pc": local})
+                    "this_pc": local, "id": h.get("id") or ""})
     out.sort(key=lambda e: (not e["this_pc"], e["name"].lower()))
     return out
 
@@ -167,6 +196,10 @@ class EngineLink:
         self.url = saved.get("url") or ""
         self.name = saved.get("name") or ""
         self.connected = bool(saved.get("connected") and self.url)
+        self.engine_id = saved.get("engine_id") or ""   # the engine this HUD is paired with
+        same_pc = saved.get("hud_pc") == socket.gethostname()   # (settings copied from another PC: a new ID)
+        self.hud_id = (saved.get("hud_id") if same_pc else "") or uuid.uuid4().hex[:16]   # this HUD, to the engine
+        self._looked_at = 0.0      # when it last looked for its engine at another address
         self.ok = False            # the last send got through
         self.error = ""
         self.sent_at = 0.0
@@ -176,6 +209,8 @@ class EngineLink:
         self._last_body = None
         self._wake = threading.Event()
         self._stop = threading.Event()
+        if self.hud_id != saved.get("hud_id"):
+            self._remember()
         threading.Thread(target=self._run, daemon=True).start()
 
     # --- what the control panel shows ----------------------------------------
@@ -183,10 +218,49 @@ class EngineLink:
     def status(self):
         return {"url": self.url, "name": self.name, "connected": self.connected, "ok": self.ok, "error": self.error,
                 "age": round(time.time() - self.sent_at, 1) if self.sent_at else None,
-                "found": self.found, "scanning": self.scanning, "source": self.source}
+                "found": self.found, "scanning": self.scanning, "source": self.source, "engine_id": self.engine_id}
 
     def _remember(self):
-        self.save({"url": self.url, "name": self.name, "connected": self.connected})
+        self.save({"url": self.url, "name": self.name, "connected": self.connected, "engine_id": self.engine_id,
+                   "hud_id": self.hud_id, "hud_pc": socket.gethostname()})
+
+    # --- staying with the engine it's paired with ------------------------------
+
+    def _adopt(self, engine_id, name=""):
+        """An engine answered as the paired one: remember its ID (a HUD paired
+        before engines had IDs takes the one at its address)."""
+        changed = False
+        if engine_id and not self.engine_id:
+            self.engine_id, changed = engine_id, True
+        if name and name != self.name:
+            self.name, changed = name, True
+        if changed:
+            self._remember()
+
+    def _find_engine(self, force=False):
+        """Looks for the paired engine at another address (its address
+        changed); moves there if it's found. Not more than every 30 seconds."""
+        if not self.engine_id or (not force and time.time() - self._looked_at < 30):
+            return False
+        self._looked_at = time.time()
+        try:
+            found = scan()
+        except Exception:
+            return False
+        for e in found:
+            if e.get("id") == self.engine_id and e["url"] != self.url:
+                self.log(f"The GFX Engine {self.name} is at {e['url']} now (was {self.url})")
+                self.url, self.name, self._last_body = e["url"], e.get("name") or self.name, None
+                self._remember()
+                return True
+        return False
+
+    def _paired_error(self, reply):
+        if reply.get("code") == "wrong_engine":
+            return Paired(f"The GFX Engine at {self.url} isn't {self.name or 'the one this HUD connected to'} "
+                          f"(another engine has that address now). Looking for {self.name or 'it'} on the network; "
+                          f"or connect again to choose.", "wrong_engine")
+        return Paired(reply.get("error") or "The GFX Engine turned this HUD away", reply.get("code") or "")
 
     # --- actions ---------------------------------------------------------------
 
@@ -204,7 +278,8 @@ class EngineLink:
         if not info:
             raise ValueError(f"No GFX Engine answered at {url}. Is it running, with 'Let other PCs use this engine' on?")
         self.url, self.name, self.connected = url, info.get("name") or url, True
-        self.error, self._last_body = "", None
+        self.engine_id = info.get("id") or ""   # paired with this engine (and only this one) from now on
+        self.error, self._last_body, self._looked_at = "", None, 0.0
         self._remember()
         self.log(f"Connected to the GFX Engine {self.name} ({url})")
         self._wake.set()
@@ -221,16 +296,35 @@ class EngineLink:
         """Takes the engine's teams (names, short names, logos) into the HUD."""
         if not self.url:
             raise ValueError("Connect to a GFX Engine first")
-        try:
-            reply = json.loads(_get(self.url + "/api/global", 5))
-        except Exception as e:
-            raise ValueError(f"Couldn't reach the GFX Engine: {getattr(e, 'reason', e)}")
+        reply = self._get_global()
+        if reply.get("code") == "wrong_engine" and self._find_engine(force=True):
+            reply = self._get_global()
+        if reply.get("error"):
+            raise self._paired_error(reply) if reply.get("code") else ValueError(reply["error"])
+        if self.engine_id and reply.get("id") and reply["id"] != self.engine_id:
+            raise self._paired_error({"code": "wrong_engine"})
+        self._adopt(reply.get("id"))
         g = reply.get("global") or {}
         summary = self.apply_global(g, lambda u: _get(u, 10))
         self.log(f"Took the global configuration from {self.name}: {summary}")
         self._last_body = None
         self._wake.set()
         return {"summary": summary, "global": g}
+
+    def _get_global(self):
+        url = self.url + "/api/global" + (f"?engine={self.engine_id}" if self.engine_id else "")
+        try:
+            return json.loads(_get(url, 5))
+        except urllib.error.HTTPError as e:
+            try:
+                reply = json.loads(e.read() or b"{}")
+            except ValueError:
+                reply = {}
+            if reply.get("error"):
+                return reply
+            raise ValueError(f"Couldn't reach the GFX Engine: {e}")
+        except Exception as e:
+            raise ValueError(f"Couldn't reach the GFX Engine: {getattr(e, 'reason', e)}")
 
     def roster(self, link=None):
         """The engine's rosters for the two teams, with which of the HUD's
@@ -242,7 +336,7 @@ class EngineLink:
             snap = self.snapshot() or {}
         except Exception:
             snap = {}
-        body = {"game": self.game, "fields": snap.get("fields") or {}}
+        body = {"game": self.game, "fields": snap.get("fields") or {}, "engine": self.engine_id}
         try:
             if link:
                 reply = _post(self.url + "/api/roster/link", dict(body, **link), 5)
@@ -253,7 +347,7 @@ class EngineLink:
         except Exception as e:
             raise ValueError(f"Couldn't reach the GFX Engine: {getattr(e, 'reason', e)}")
         if reply.get("error"):
-            raise ValueError(reply["error"])
+            raise self._paired_error(reply) if reply.get("code") else ValueError(reply["error"])
         return reply
 
     def send_now(self):
@@ -277,21 +371,28 @@ class EngineLink:
                 self.error = f"Couldn't read the HUD: {e!r}"
                 continue
             body = {"source": self.source, "game": self.game, "fields": snap.get("fields") or {},
-                    "series": snap.get("series") or {}, "hud": snap.get("hud")}
+                    "series": snap.get("series") or {}, "hud": snap.get("hud"),
+                    "engine": self.engine_id, "hud_id": self.hud_id}
             if body == self._last_body and time.time() - self.sent_at < 4:
                 continue
             try:
                 reply = _post(self.url + "/api/ingest", body)
                 if reply.get("error"):
-                    raise ValueError(reply["error"])
+                    raise self._paired_error(reply) if reply.get("code") else ValueError(reply["error"])
+                if self.engine_id and reply.get("id") and reply["id"] != self.engine_id:
+                    raise self._paired_error({"code": "wrong_engine"})
+                self._adopt(reply.get("id"), reply.get("name") or "")
                 self.engine_global = reply.get("global")
                 if not self.ok:
                     self.log(f"Sending to the GFX Engine {self.name}")
                 self.ok, self.error, self.sent_at, self._last_body = True, "", time.time(), body
             except Exception as e:
-                if self.ok or not self.error:
-                    self.log(f"Couldn't reach the GFX Engine {self.name}: {getattr(e, 'reason', e)}", "warn")
-                self.ok, self.error = False, str(getattr(e, "reason", e))
+                msg = str(getattr(e, "reason", e))
+                if self.ok or msg != self.error:
+                    self.log(f"Couldn't send to the GFX Engine {self.name}: {msg}", "warn")
+                self.ok, self.error = False, msg
+                if getattr(e, "code", "") != "taken" and self._find_engine():
+                    continue   # (found it at its new address: send there now)
                 self._stop.wait(2)
 
     # --- the HUD's web server --------------------------------------------------
