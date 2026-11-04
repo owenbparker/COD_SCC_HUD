@@ -21,7 +21,8 @@ original, in hud-link/). A HUD makes one EngineLink with:
                   g["sponsors"]: [{"logo_url", "secs", "white"}]); fetch(url)
                   -> bytes for the logos (see save_sponsors())
     load() / save(dict)   where the chosen engine is remembered
-    follow        (default True) take the engine's Global teams in by itself:
+    follow        (default True) take the engine's Global teams (and series
+                  score, for a HUD whose apply_global takes g[side]["score"]) in by itself:
                   on connecting, whenever they change there, and again when the
                   HUD's own teams have drifted from them. False for a HUD that
                   follows Global its own way (CoD).
@@ -515,7 +516,7 @@ class EngineLink:
         return None
 
 
-_TEAM_KEYS = ("name", "short", "logo", "color")
+_TEAM_KEYS = ("name", "short", "logo", "color", "score")
 
 
 def _scores_only(series):
@@ -533,7 +534,7 @@ def _scores_only(series):
 
 def _global_key(g):
     """What of the engine's Global configuration a HUD takes in: each team's
-    (name, short, logo, colour), the tournament logo and the sponsors."""
+    (name, short, logo, colour, series score), the tournament logo and the sponsors."""
     team = lambda s: tuple(str((g.get(s) or {}).get(k) or "") for k in _TEAM_KEYS)
     return (team("left"), team("right"), str(g.get("tournament_logo") or ""),
             json.dumps([[sp.get("logo"), sp.get("secs")] for sp in g.get("sponsors") or [] if isinstance(sp, dict)]))
