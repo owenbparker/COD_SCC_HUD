@@ -46,7 +46,8 @@ class HudApp:
         # The SCC GFX Engine: the match and series go to it; its teams can come here.
         self.engine = EngineLink("CoD HUD", "cod", self._engine_snapshot, self._engine_apply_global,
                                  load=lambda: self.config.get().get("gfx_engine"),
-                                 save=lambda d: self.config.update({"gfx_engine": d}), log=log)
+                                 save=lambda d: self.config.update({"gfx_engine": d}), log=log,
+                                 follow=False)   # (follows Global its own way: _follow)
         self.scanner.postgame.on_read = self.engine.send_now   # (the post-game stats go at once)
 
     def stop(self):

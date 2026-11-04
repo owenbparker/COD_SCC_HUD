@@ -1,6 +1,7 @@
-"""Connect to GFX Engine: a game HUD sends its game and series to an SCC GFX
-Engine on the network, and can take the engine's global configuration (the
-teams' names, short names and logos).
+"""Connect to GFX Engine: a game HUD sends its game and series score to an SCC
+GFX Engine on the network, and follows the engine's global configuration (the
+teams' names, short names, logos and colours): Global is where the teams are
+set, and the HUD never sends its own teams back.
 
 The same file is in every SCC HUD (the GFX Engine repository keeps the
 original, in hud-link/). A HUD makes one EngineLink with:
@@ -20,9 +21,20 @@ original, in hud-link/). A HUD makes one EngineLink with:
                   g["sponsors"]: [{"logo_url", "secs", "white"}]); fetch(url)
                   -> bytes for the logos (see save_sponsors())
     load() / save(dict)   where the chosen engine is remembered
+    follow        (default True) take the engine's Global teams in by itself:
+                  on connecting, whenever they change there, and again when the
+                  HUD's own teams have drifted from them. False for a HUD that
+                  follows Global its own way (CoD).
+    swap()        optional: swaps the HUD's sides here only (teams, wins...).
+                  Called when the engine's Global teams were swapped, before
+                  they're taken in. A HUD's own Swap sides button calls
+                  swap_global() too, so the engine swaps with it.
 
 and serves its routes (see handle()). While connected it sends the snapshot
-about once a second (at once when it changes, at least every 4 seconds).
+about once a second (at once when it changes, at least every 4 seconds). Of
+the series only the scores and best of are sent: the engine's Global teams are
+never overwritten by a HUD's (an old match's teams left in a HUD kept replacing
+the ones set in Global).
 
 A HUD is paired with the one engine it connected to: it remembers that
 engine's ID and sends it with everything, so another engine on the network
@@ -184,8 +196,12 @@ def scan(port=PORT):
 
 
 class EngineLink:
-    def __init__(self, source, game, snapshot, apply_global, load, save, log=None):
+    RECHECK = 15   # seconds between taking the Global teams in again while the HUD's have drifted from them
+
+    def __init__(self, source, game, snapshot, apply_global, load, save, log=None, follow=True, swap=None):
         self.source = source
+        self.follow = follow
+        self.swap = swap
         self.game = game
         self.snapshot = snapshot
         self.apply_global = apply_global
@@ -207,6 +223,10 @@ class EngineLink:
         self.scanning = False
         self.engine_global = None  # the engine's global configuration (from its replies)
         self._last_body = None
+        self._followed = None      # the Global teams the HUD last took in (_global_key)
+        self._followed_at = 0.0
+        self._following = False
+        self._follow_error = ""
         self._wake = threading.Event()
         self._stop = threading.Event()
         if self.hud_id != saved.get("hud_id"):
@@ -218,7 +238,8 @@ class EngineLink:
     def status(self):
         return {"url": self.url, "name": self.name, "connected": self.connected, "ok": self.ok, "error": self.error,
                 "age": round(time.time() - self.sent_at, 1) if self.sent_at else None,
-                "found": self.found, "scanning": self.scanning, "source": self.source, "engine_id": self.engine_id}
+                "found": self.found, "scanning": self.scanning, "source": self.source, "engine_id": self.engine_id,
+                "follow": bool(self.follow)}
 
     def _remember(self):
         self.save({"url": self.url, "name": self.name, "connected": self.connected, "engine_id": self.engine_id,
@@ -280,6 +301,7 @@ class EngineLink:
         self.url, self.name, self.connected = url, info.get("name") or url, True
         self.engine_id = info.get("id") or ""   # paired with this engine (and only this one) from now on
         self.error, self._last_body, self._looked_at = "", None, 0.0
+        self._followed = None   # (takes this engine's teams in on its first reply)
         self._remember()
         self.log(f"Connected to the GFX Engine {self.name} ({url})")
         self._wake.set()
@@ -326,6 +348,66 @@ class EngineLink:
         except Exception as e:
             raise ValueError(f"Couldn't reach the GFX Engine: {getattr(e, 'reason', e)}")
 
+    def swap_global(self):
+        """The HUD's sides were swapped (its Swap sides button): the engine's
+        Global teams swap too, so following Global keeps them where the HUD
+        put them. Quietly does nothing when not connected."""
+        if not (self.connected and self.url):
+            return False
+        try:
+            reply = self._get_global()
+            g = reply.get("global") or {}
+            if reply.get("error") or not g:
+                raise ValueError(reply.get("error") or "no Global configuration")
+            keys = ("name", "short", "logo", "color", "score")
+            left, right = ({k: (g.get(s) or {}).get(k) for k in keys if k in (g.get(s) or {})} for s in ("left", "right"))
+            _post(self.url + "/api/global", {"global": {"left": right, "right": left}, "engine": self.engine_id}, 5)
+            swapped = dict(g, left=dict(g.get("left") or {}, **right), right=dict(g.get("right") or {}, **left))
+            self._followed, self._followed_at = _global_key(swapped), time.time()   # (already swapped here)
+            self.log(f"Swapped the sides in {self.name}'s Global configuration too")
+            self._last_body = None
+            self._wake.set()
+            return True
+        except Exception as e:
+            self.log(f"Couldn't swap the sides on the GFX Engine: {getattr(e, 'reason', e)}", "warn")
+            return False
+
+    # --- following the engine's Global teams -------------------------------------
+
+    def _check_follow(self, g, mine):
+        """After each send: takes the engine's Global teams in when they've
+        changed there (swapping the HUD's sides first when that's what
+        changed), or when the HUD's own team names no longer match them (e.g.
+        an old match's teams came back), at most every RECHECK seconds for that."""
+        if not self.follow or not isinstance(g, dict) or self._following:
+            return
+        key = _global_key(g)
+        names = [str((g.get(s) or {}).get("name") or "") for s in ("left", "right")]
+        have = [str((mine.get(s) or {}).get("name") or "") if isinstance(mine.get(s), dict) else None
+                for s in ("left", "right")]
+        drifted = any(n and h is not None and h != n for n, h in zip(names, have))
+        if key == self._followed and not (drifted and time.time() - self._followed_at > self.RECHECK):
+            return
+        old = self._followed
+        swapped = bool(self.swap and old and key != old and _swapped(old, key) and have[0] == old[0][0])
+        self._following = True
+        threading.Thread(target=self._take_global, args=(key, swapped), daemon=True, name="follow-global").start()
+
+    def _take_global(self, key, swapped):
+        try:
+            if swapped:
+                self.swap()
+                self.log(f"{self.name} swapped the sides: swapped them here too")
+            self.use_global()
+            self._follow_error = ""
+        except Exception as e:
+            msg = str(e)
+            if msg != self._follow_error:
+                self.log(f"Couldn't take {self.name}'s Global teams in: {msg}", "warn")
+            self._follow_error = msg
+        finally:
+            self._followed, self._followed_at, self._following = key, time.time(), False
+
     def roster(self, link=None):
         """The engine's rosters for the two teams, with which of the HUD's
         players are linked to a roster player by in-game ID ("Save IGN to
@@ -370,8 +452,9 @@ class EngineLink:
             except Exception as e:
                 self.error = f"Couldn't read the HUD: {e!r}"
                 continue
+            mine = snap.get("series") or {}
             body = {"source": self.source, "game": self.game, "fields": snap.get("fields") or {},
-                    "series": snap.get("series") or {}, "hud": snap.get("hud"),
+                    "series": _scores_only(mine), "hud": snap.get("hud"),
                     "engine": self.engine_id, "hud_id": self.hud_id}
             if body == self._last_body and time.time() - self.sent_at < 4:
                 continue
@@ -383,6 +466,7 @@ class EngineLink:
                     raise self._paired_error({"code": "wrong_engine"})
                 self._adopt(reply.get("id"), reply.get("name") or "")
                 self.engine_global = reply.get("global")
+                self._check_follow(self.engine_global, mine)
                 if not self.ok:
                     self.log(f"Sending to the GFX Engine {self.name}")
                 self.ok, self.error, self.sent_at, self._last_body = True, "", time.time(), body
@@ -429,6 +513,35 @@ class EngineLink:
             b = body or {}
             return self.roster({"side": b.get("side"), "player": b.get("player"), "ign": b.get("ign")})
         return None
+
+
+_TEAM_KEYS = ("name", "short", "logo", "color")
+
+
+def _scores_only(series):
+    """The series as sent to the engine: each side's score and the best of,
+    never the HUD's team names, short names or colours (Global has those)."""
+    out = {}
+    for side in ("left", "right"):
+        t = series.get(side)
+        if isinstance(t, dict) and t.get("score") not in (None, ""):
+            out[side] = {"score": t["score"]}
+    if series.get("best_of"):
+        out["best_of"] = series["best_of"]
+    return out
+
+
+def _global_key(g):
+    """What of the engine's Global configuration a HUD takes in: each team's
+    (name, short, logo, colour), the tournament logo and the sponsors."""
+    team = lambda s: tuple(str((g.get(s) or {}).get(k) or "") for k in _TEAM_KEYS)
+    return (team("left"), team("right"), str(g.get("tournament_logo") or ""),
+            json.dumps([[sp.get("logo"), sp.get("secs")] for sp in g.get("sponsors") or [] if isinstance(sp, dict)]))
+
+
+def _swapped(old, new):
+    """The two teams changed places (the engine's Swap sides)."""
+    return old[0] != old[1] and new[0] == old[1] and new[1] == old[0] and any(old[0][:2]) and any(old[1][:2])
 
 
 def save_sponsors(g, fetch, folder, prefix, log=None):

@@ -429,8 +429,8 @@ class EngineLinkTests(unittest.TestCase):
                 self.assertTrue(ingests, "the HUD sent nothing to the engine")
                 sent = ingests[-1]
                 self.assertEqual((sent["source"], sent["game"]), ("CoD HUD", "cod"))
-                self.assertEqual(sent["series"]["left"]["short"], "FUEL")
-                self.assertEqual(sent["series"]["right"]["name"], "ST. CLAIR SAINTS")
+                self.assertNotIn("short", sent["series"].get("left") or {})   # (never its teams: Global has those)
+                self.assertNotIn("name", sent["series"].get("right") or {})
                 self.assertEqual(sent["series"]["best_of"], 5)
                 self.assertEqual(sent["fields"]["left_name"], "FUEL ESPORTS")
                 deadline = time.time() + 10

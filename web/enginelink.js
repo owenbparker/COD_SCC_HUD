@@ -1,7 +1,7 @@
 // The control panel's "GFX Engine" page, the same in every SCC HUD (the GFX
 // Engine repository keeps the original, in hud-link/): find SCC GFX Engines on
-// the network, connect to one (this HUD's game and series go to it), and take
-// its global configuration (team names, short names, logos) into the HUD.
+// the network, connect to one (this HUD's game and series score go to it), and
+// follow its global configuration (team names, short names, logos, colours).
 //
 // Load it before shell.js, with {"id": "engine", "label": "GFX Engine",
 // "icon": "engine"} in window.SHELL.pages. The HUD serves /api/engine
@@ -51,11 +51,11 @@
     <div class="eng-row"><input id="eng-url" placeholder="Or type its address, e.g. 192.168.1.20" spellcheck="false"><button id="eng-connect">Connect</button></div>
     <div class="eng-global" id="eng-global" hidden>
       <button class="big" id="eng-use">Use Global Information</button>
-      <p class="note">Takes the team names, short names and logos from the engine's Global configuration into this HUD (left and right as they are there).</p>
+      <p class="note" id="eng-follow-note">Takes the team names, short names and logos from the engine's Global configuration into this HUD (left and right as they are there).</p>
       <div class="eng-teams" id="eng-teams"></div>
     </div>
     <p class="note">This HUD talks only to the engine it's connected to, even with other GFX Engines on the network (if that engine's address changes, the HUD finds it again).</p>
-    <p class="note">Sent to the engine about once a second: the series (team names, short names, scores, best of), which updates its Global configuration, and the live game's stats, which its graphics read as the data table "<span id="eng-source">this HUD</span>" (e.g. <code>{{<span class="eng-src">HUD</span>!Field}}</code>).</p>`;
+    <p class="note">Sent to the engine about once a second: the series score and best of, which update its Global configuration (never the HUD's team names: those come from Global), and the live game's stats, which its graphics read as the data table "<span id="eng-source">this HUD</span>" (e.g. <code>{{<span class="eng-src">HUD</span>!Field}}</code>).</p>`;
   main.appendChild(section);
 
   const $ = id => document.getElementById(id);
@@ -80,6 +80,9 @@
     $("eng-disconnect").hidden = !s.connected;
     $("eng-global").hidden = !s.url;
     $("eng-use").disabled = !s.url;
+    $("eng-follow-note").textContent = s.follow
+      ? "While connected, this HUD follows the engine's Global configuration: the teams (names, short names, logos) are set there and come here by themselves, left and right as they are there. Change them in the engine's Global configuration. This button takes them in again now."
+      : "Takes the team names, short names and logos from the engine's Global configuration into this HUD (left and right as they are there).";
     for (const el of document.querySelectorAll("#eng-source, .eng-src")) el.textContent = s.source || "HUD";
     if (document.activeElement !== $("eng-url") && !$("eng-url").value && s.url) $("eng-url").value = s.url.replace(/^http:\/\//, "");
     const list = $("eng-list");
