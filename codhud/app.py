@@ -14,7 +14,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import detect, fonts, postgame
+from . import appearance, detect, fonts, postgame
 from .cams import CamHub
 from .config import DATA_DIR, DEFAULTS, LOGO_DIR, WEB_DIR
 from .enginelink import EngineLink, _get, _post, save_logo_bytes
@@ -518,6 +518,8 @@ def make_handler(app):
         def do_GET(self):
             url = urlparse(self.path)
             path = url.path
+            if appearance.handle(self, "GET", path, DATA_DIR):
+                return
             query = parse_qs(url.query)
             if path == "/":
                 self.send_response(302)
@@ -558,6 +560,8 @@ def make_handler(app):
 
         def do_POST(self):
             path = urlparse(self.path).path
+            if appearance.handle(self, "POST", path, DATA_DIR):
+                return
             length = int(self.headers.get("Content-Length") or 0)
             if path in ("/api/cam/poll", "/api/cam/send", "/api/cam/list"):
                 # Player cams, from any PC on the network.

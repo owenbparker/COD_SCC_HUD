@@ -25,6 +25,7 @@
     data: '<path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" fill="none" stroke="currentColor" stroke-width="2"/>',
     engine: '<path d="M3 5h18v11H3z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2"/><path d="M7 12l3-3 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     log: '<path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" fill="none" stroke="currentColor" stroke-width="2"/>',
+    appearance: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/>',
   };
   const icon = name => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">${ICONS[name] || ICONS.overview}</svg>`;
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -32,6 +33,16 @@
   document.body.classList.add("shell");
   const header = document.querySelector("header");
   const main = document.querySelector("main");
+  // Appearance (the look and highlight colour, appearance.js) is the last page in every HUD.
+  if (window.Appearance && main && !cfg.pages.some(p => p.id === "appearance")) {
+    cfg.pages.push({ id: "appearance", label: "Appearance", group: "App" });
+    const sec = document.createElement("section");
+    sec.className = "wide";
+    sec.dataset.page = "appearance";
+    sec.innerHTML = '<h2>Appearance</h2><div class="appearance-box"></div>';
+    main.appendChild(sec);
+    window.Appearance.render(sec.querySelector(".appearance-box"));
+  }
   const aside = document.querySelector("aside");
   // Everything goes in one content area, one page at a time: the preview,
   // outputs and log first.
