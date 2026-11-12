@@ -98,7 +98,7 @@ DEFAULTS = {
                 # over the game's (inner ones at 866 and 1042, 17 apart).
                 "layout": {"v": 2, "cover_x": 727, "cover_top": 59, "cover_w": 88, "cover_h": 88,
                            "logo_size": 80, "logo_y": 63,
-                           "best_of_w": 124, "best_of_h": 28, "best_of_y": 19, "best_of_text": 24,
+                           "best_of_w": 124, "best_of_h": 28, "best_of_y": 19, "best_of_text": 20,
                            "pip_y": 28, "pip_size": 12,
                            # The webcam: flush left of the game's player card
                            # (1413..1718 x 896..1025), its full height.
@@ -174,6 +174,9 @@ class Config:
             saved_layout = (saved.get("overlay") or {}).get("layout") or {}
             if saved_layout and saved_layout.get("v") != DEFAULTS["overlay"]["layout"]["v"]:
                 self.data["overlay"]["layout"] = copy.deepcopy(DEFAULTS["overlay"]["layout"])
+            # (v1.0.20's BEST OF text, 24px, was a bit big)
+            if saved_layout.get("best_of_text") == 24:
+                self.data["overlay"]["layout"]["best_of_text"] = DEFAULTS["overlay"]["layout"]["best_of_text"]
             # The first builds used 8779, which the League HUD's player cam page uses.
             if self.data.get("http_port") == 8779:
                 self.data["http_port"] = 8780
