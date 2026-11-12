@@ -179,6 +179,7 @@
         <option value="7">Best of 7</option><option value="9">Best of 9</option></select></div>
       <div><label>Team names' font</label><select class="font" data-k="fonts.name"></select></div>
     </div>
+    <label class="toggle" style="margin-top: 8px"><input type="checkbox" data-k="overlay.pips"> Show our series score (turn off to show the game's own series tracker)</label>
   </section>
 
   <section class="wide" data-page="teams editor">
@@ -191,7 +192,7 @@
       <label class="toggle"><input type="checkbox" data-k="overlay.sponsor"> Sponsors</label>
     </div>
     <h3>Score box <button class="reset" data-reset="overlay.layout">Reset</button></h3>
-    <p class="note" style="margin-top:0">In 1920×1080 pixels. The covers hide the game's own logos and the team logos sit on them; the right side mirrors the left. Click the preview to read a pixel's position.</p>
+    <p class="note" style="margin-top:0">In 1920×1080 pixels. The team logos sit in the empty boxes beside the scores, on covers the box's colour; the right side mirrors the left. Click the preview to read a pixel's position.</p>
     <table class="cal">
       <tr><th></th><th>X</th><th>Top</th><th>Width</th><th>Height</th><th>Text</th></tr>
       <tr><td>Logo covers</td><td><input type="number" data-k="overlay.layout.cover_x"></td><td><input type="number" data-k="overlay.layout.cover_top"></td>
@@ -201,6 +202,8 @@
       <tr><td>BEST OF box</td><td></td><td><input type="number" data-k="overlay.layout.best_of_y"></td>
           <td><input type="number" data-k="overlay.layout.best_of_w"></td><td><input type="number" data-k="overlay.layout.best_of_h"></td>
           <td><input type="number" data-k="overlay.layout.best_of_text"></td></tr>
+      <tr><td>Series pips</td><td></td><td><input type="number" data-k="overlay.layout.pip_y"></td>
+          <td><input type="number" data-k="overlay.layout.pip_size" title="Width and height"></td><td></td><td></td></tr>
     </table>
     <h3>Sponsors</h3>
     <div class="sponsor-strip" id="sponsors"></div>

@@ -9,8 +9,9 @@
   CDL broadcasts):
     - each team's name plate over the HUD's team bars: the team's name, with a
       strip of its logo at the outer end;
-    - the team logos in the score box, over the game's own;
-    - the series score in place of the game's pips (over "BEST OF");
+    - the team logos in the score box, in the empty spaces beside the scores;
+    - the series score in place of the game's pips and "BEST OF n" (Series
+      score off: the game's own series tracker shows instead);
     - the spectated player's webcam, left of their player card;
     - the sponsors, one after another, under the middle of the screen.
   Everything shows only while the CoD caster HUD is on screen (the score box
@@ -19,6 +20,7 @@
   information.
 -->
 <style>
+  @font-face { font-family: "SCC condensed"; src: url("fonts/BebasNeue.ttf") format("truetype"); }
   @font-face { font-family: "SCC fallback"; src: url("fonts/Inter.ttf") format("truetype"); font-weight: 100 900; }
   html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
   .part { position: absolute; opacity: 0; transition: opacity .25s ease; pointer-events: none; }
@@ -35,14 +37,15 @@
   .name span { display: block; flex: none; transform: translateY(.03em); }
   .plate.left .name { left: 242px; width: 359px; justify-content: flex-end; }
   .plate.right .name { left: 10px; width: 359px; }
-  /* The score box: a dark backing over the game's logo, the team's logo on it. */
+  /* The score box: a backing the colour of the box beside each score, the team's logo on it. */
   .mini-bg { background: #14151B; }
   /* The series score, over the game's pips. */
   .pip-cover { background: #14151B; }
-  .pip { position: absolute; top: 28px; width: 11px; height: 11px; background: #4e4f55; }
+  .pip { position: absolute; background: #4e4f53; }
   .pip.won { background: var(--won, #fff); }
   .best-of { position: absolute; background: #23252D; color: #fff;
-             display: flex; align-items: center; justify-content: center; font: 500 16px "SCC fallback", sans-serif; letter-spacing: .02em; }
+             display: flex; align-items: center; justify-content: center; font: 400 24px "SCC condensed", "SCC fallback", sans-serif; letter-spacing: .01em; }
+  .best-of span { transform: translateY(.06em); }
   /* The webcam: CDL's place, left of the game's player card. */
   #cam { left: 1238px; top: 896px; width: 175px; height: 130px; background: #0c0d10; overflow: hidden;
          transform: translateX(12px); transition: opacity .25s ease, transform .35s cubic-bezier(.2, .8, .2, 1); }
@@ -118,23 +121,27 @@
       '<div class="clip plate left">' + img(L.logo, 9 + 28.5, -58.5, 193, 193) + '<div class="name"><span>' + esc(L.name) + "</span></div></div>" +
       '<div class="clip plate right">' + img(R.logo, 364 + 28.5, -53.5, 193, 193) + '<div class="name"><span>' + esc(R.name) + "</span></div></div>";
     // The score box's logos, on covers over the game's (the right side mirrors the left about the middle).
-    var lay = Object.assign({ cover_x: 734, cover_top: 37, cover_w: 70, cover_h: 70, logo_size: 62, logo_y: 41,
-                              best_of_w: 104, best_of_h: 17, best_of_y: 20, best_of_text: 13 }, (look.overlay || {}).layout);
+    var lay = Object.assign({ cover_x: 727, cover_top: 59, cover_w: 88, cover_h: 88, logo_size: 80, logo_y: 63,
+                              best_of_w: 124, best_of_h: 28, best_of_y: 19, best_of_text: 24, pip_y: 28, pip_size: 12 },
+                            (look.overlay || {}).layout);
     var cx = +lay.cover_x, cw = +lay.cover_w, rx = 1920 - cx - cw, ls = +lay.logo_size, lx = cx + (cw - ls) / 2;
     $("logos").innerHTML = box("abs mini-bg", cx, lay.cover_top, cw, lay.cover_h) + box("abs mini-bg", rx, lay.cover_top, cw, lay.cover_h) +
       img(L.logo, lx, lay.logo_y, ls, ls) + img(R.logo, 1920 - lx - ls, lay.logo_y, ls, ls);
-    // The series score: a pip per map needed to win, inner ones first.
+    // The series score: a pip per map needed to win, inner ones first, in the
+    // game's places (inner ones end at 877 and start at 1042, 17 apart).
     var need = Math.min(5, Math.max(1, Math.ceil((Number(m.best_of) || 1) / 2)));
+    var ps = +lay.pip_size, py = +lay.pip_y, inL = 878 - ps;
     // (the game's own, up to 5 a side, covered)
-    var pips = box("abs pip-cover", 794, 25, 90, 17) + box("abs pip-cover", 1038, 25, 90, 17);
+    var pips = box("abs pip-cover", 790, py - 4, 100, ps + 8) + box("abs pip-cover", 1030, py - 4, 100, ps + 8);
     for (var k = 0; k < need; k++) {
-      pips += '<div class="pip' + ((L.wins || 0) > k ? " won" : "") + '" style="left:' + (866 - 17 * k) + "px;--won:" + esc(L.color || "#fff") + '"></div>';
-      pips += '<div class="pip' + ((R.wins || 0) > k ? " won" : "") + '" style="left:' + (1042 + 17 * k) + "px;--won:" + esc(R.color || "#fff") + '"></div>';
+      var sz = "top:" + py + "px;width:" + ps + "px;height:" + ps + "px;";
+      pips += '<div class="pip' + ((L.wins || 0) > k ? " won" : "") + '" style="' + sz + "left:" + (inL - 17 * k) + "px;--won:" + esc(L.color || "#fff") + '"></div>';
+      pips += '<div class="pip' + ((R.wins || 0) > k ? " won" : "") + '" style="' + sz + "left:" + (1042 + 17 * k) + "px;--won:" + esc(R.color || "#fff") + '"></div>';
     }
     // ("BEST OF n" too, so it says the same as the pips)
     var bw = +lay.best_of_w;
     $("pips").innerHTML = pips + '<div class="best-of" style="left:' + (960 - bw / 2) + "px;top:" + lay.best_of_y + "px;width:" + bw +
-      "px;height:" + lay.best_of_h + "px;font-size:" + lay.best_of_text + 'px">BEST OF ' + esc(m.best_of) + "</div>";
+      "px;height:" + lay.best_of_h + "px;font-size:" + lay.best_of_text + 'px"><span>BEST OF ' + esc(m.best_of) + "</span></div>";
     fit();
     if (document.fonts) document.fonts.ready.then(fit);
   }
