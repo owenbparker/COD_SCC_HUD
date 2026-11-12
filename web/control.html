@@ -191,7 +191,7 @@
       <label class="toggle"><input type="checkbox" data-k="overlay.cam"> Webcam</label>
       <label class="toggle"><input type="checkbox" data-k="overlay.sponsor"> Sponsors</label>
     </div>
-    <h3>Score box <button class="reset" data-reset="overlay.layout">Reset</button></h3>
+    <h3>Score box and webcam <button class="reset" data-reset="overlay.layout">Reset</button></h3>
     <p class="note" style="margin-top:0">In 1920×1080 pixels. The team logos sit in the empty boxes beside the scores, on covers the box's colour; the right side mirrors the left. Click the preview to read a pixel's position.</p>
     <table class="cal">
       <tr><th></th><th>X</th><th>Top</th><th>Width</th><th>Height</th><th>Text</th></tr>
@@ -204,6 +204,8 @@
           <td><input type="number" data-k="overlay.layout.best_of_text"></td></tr>
       <tr><td>Series pips</td><td></td><td><input type="number" data-k="overlay.layout.pip_y"></td>
           <td><input type="number" data-k="overlay.layout.pip_size" title="Width and height"></td><td></td><td></td></tr>
+      <tr><td>Webcam</td><td><input type="number" data-k="overlay.layout.cam_x"></td><td><input type="number" data-k="overlay.layout.cam_y"></td>
+          <td><input type="number" data-k="overlay.layout.cam_w"></td><td><input type="number" data-k="overlay.layout.cam_h"></td><td></td></tr>
     </table>
     <h3>Sponsors</h3>
     <div class="sponsor-strip" id="sponsors"></div>

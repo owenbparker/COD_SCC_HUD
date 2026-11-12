@@ -12,7 +12,7 @@
     - the team logos in the score box, in the empty spaces beside the scores;
     - the series score in place of the game's pips and "BEST OF n" (Series
       score off: the game's own series tracker shows instead);
-    - the spectated player's webcam, left of their player card;
+    - the spectated player's webcam, flush left of their player card;
     - the sponsors, one after another, under the middle of the screen.
   Everything shows only while the CoD caster HUD is on screen (the score box
   parts also while only the score box is up). Teams, logos, scores and
@@ -47,7 +47,7 @@
              display: flex; align-items: center; justify-content: center; font: 400 24px "SCC condensed", "SCC fallback", sans-serif; letter-spacing: .01em; }
   .best-of span { transform: translateY(.06em); }
   /* The webcam: CDL's place, left of the game's player card. */
-  #cam { left: 1238px; top: 896px; width: 175px; height: 130px; background: #0c0d10; overflow: hidden;
+  #cam { left: 1205px; top: 896px; width: 208px; height: 130px; background: #0c0d10; overflow: hidden;
          transform: translateX(12px); transition: opacity .25s ease, transform .35s cubic-bezier(.2, .8, .2, 1); }
   #cam.on { transform: none; }
   #cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
@@ -56,7 +56,7 @@
   #cam .dummy.on { display: block; }
   #cam .dummy i { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font: 600 11px "SCC fallback", sans-serif;
                   letter-spacing: .12em; color: #fff9; font-style: normal; }
-  #cam .dummy b { position: absolute; left: 0; right: 0; top: 46px; text-align: center; font: 800 20px "SCC fallback", sans-serif; color: #fff; }
+  #cam .dummy b { position: absolute; left: 0; right: 0; top: calc(50% - 16px); text-align: center; font: 800 20px "SCC fallback", sans-serif; color: #fff; }
   /* The sponsors: CDL's box under the middle of the screen. */
   #sponsor { left: 857px; top: 939px; width: 206px; height: 97px; background: rgba(46, 44, 42, .94);
              box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .85); }
@@ -122,8 +122,11 @@
       '<div class="clip plate right">' + img(R.logo, 364 + 28.5, -53.5, 193, 193) + '<div class="name"><span>' + esc(R.name) + "</span></div></div>";
     // The score box's logos, on covers over the game's (the right side mirrors the left about the middle).
     var lay = Object.assign({ cover_x: 727, cover_top: 59, cover_w: 88, cover_h: 88, logo_size: 80, logo_y: 63,
-                              best_of_w: 124, best_of_h: 28, best_of_y: 19, best_of_text: 24, pip_y: 28, pip_size: 12 },
+                              best_of_w: 124, best_of_h: 28, best_of_y: 19, best_of_text: 24, pip_y: 28, pip_size: 12,
+                              cam_x: 1205, cam_y: 896, cam_w: 208, cam_h: 130 },
                             (look.overlay || {}).layout);
+    var cam = $("cam").style;
+    cam.left = lay.cam_x + "px"; cam.top = lay.cam_y + "px"; cam.width = lay.cam_w + "px"; cam.height = lay.cam_h + "px";
     var cx = +lay.cover_x, cw = +lay.cover_w, rx = 1920 - cx - cw, ls = +lay.logo_size, lx = cx + (cw - ls) / 2;
     $("logos").innerHTML = box("abs mini-bg", cx, lay.cover_top, cw, lay.cover_h) + box("abs mini-bg", rx, lay.cover_top, cw, lay.cover_h) +
       img(L.logo, lx, lay.logo_y, ls, ls) + img(R.logo, 1920 - lx - ls, lay.logo_y, ls, ls);

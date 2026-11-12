@@ -99,7 +99,10 @@ DEFAULTS = {
                 "layout": {"v": 2, "cover_x": 727, "cover_top": 59, "cover_w": 88, "cover_h": 88,
                            "logo_size": 80, "logo_y": 63,
                            "best_of_w": 124, "best_of_h": 28, "best_of_y": 19, "best_of_text": 24,
-                           "pip_y": 28, "pip_size": 12}},
+                           "pip_y": 28, "pip_size": 12,
+                           # The webcam: flush left of the game's player card
+                           # (1413..1718 x 896..1025), its full height.
+                           "cam_x": 1205, "cam_y": 896, "cam_w": 208, "cam_h": 130}},
     # The team names' font (installed on this PC, sent to the overlay so it
     # shows on any PC; Inter when it isn't installed).
     "fonts": {"name": "Gotham"},
