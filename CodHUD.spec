@@ -13,6 +13,12 @@ icon = os.path.join(root, "packaging", "icon.ico")
 from PyInstaller.utils.hooks import collect_all
 
 hidden, datas, binaries = [], [(os.path.join(root, "web"), "web")], []
+# Custom design (HUD Builder, built in): its pages, the PSD reader and Figma files' zstandard.
+from PyInstaller.utils.hooks import collect_all
+datas.append((os.path.join(root, "hudbuilder", "web"), os.path.join("hudbuilder", "web")))
+for package in ("psd_tools", "zstandard"):
+    d, b, h = collect_all(package)
+    datas, binaries, hidden = datas + d, binaries + b, hidden + h
 if sys.platform == "win32":
     # pywebview's Windows window (Edge WebView2) is loaded at runtime.
     hidden += ["webview.platforms.winforms", "webview.platforms.edgechromium", "clr"]

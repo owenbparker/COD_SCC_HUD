@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from . import appearance, detect, fonts, postgame
 from .cams import CamHub
 from .config import DATA_DIR, DEFAULTS, LOGO_DIR, WEB_DIR
+from hudbuilder import embed as hud_builder
 from .enginelink import EngineLink, _get, _post, save_logo_bytes
 from .log import log, since
 from .names import same_player
@@ -37,6 +38,7 @@ class HudApp:
         self.cams = CamHub()   # player webcams (SCC Player Cam, Call of Duty mode)
         self.updater = Updater()
         self.server = None
+        self.builder = None         # Custom design: HUD Builder, built in (hudbuilder/embed.py)
         self._config_version = config.version
         self.roster = {}           # side -> the GFX Engine's roster of the side's team ({"team", "found", "members"})
         self._applied = {}         # what of the engine's Global information is in the HUD (logo addresses...)
@@ -50,7 +52,26 @@ class HudApp:
                                  follow=False)   # (follows Global its own way: _follow)
         self.scanner.postgame.on_read = self.engine.send_now   # (the post-game stats go at once)
 
+    def _builder_snapshot(self):
+        """What Custom design reads: what the GFX Engine gets, with the teams' logos."""
+        snap = self._engine_snapshot()
+        cfg = self.config.get()
+        series = snap.get("series") or {}
+        for side in ("left", "right"):
+            team = cfg.get(side) if isinstance(cfg.get(side), dict) else (cfg.get("match") or {}).get(side) or {}
+            # (the HUD's own team when the snapshot leaves the series out, e.g. while it follows the GFX Engine)
+            own = {"name": team.get("name") or "", "short": team.get("tricode") or team.get("short") or "",
+                   "score": team.get("wins") or 0, "color": team.get("color") or "", "logo": team.get("logo") or ""}
+            series[side] = dict(own, **{k: v for k, v in (series.get(side) or {}).items() if v not in (None, "")})
+        series.setdefault("best_of", (cfg.get("match") or {}).get("best_of") or cfg.get("best_of") or 3)
+        snap["series"] = series
+        snap.setdefault("event", cfg.get("event") or "")
+        snap.setdefault("stage", cfg.get("stage") or "")
+        return snap
+
     def stop(self):
+        if self.builder:
+            self.builder.stop()
         self._stop.set()
         self.scanner.stop()
         self.engine.stop()
@@ -574,6 +595,12 @@ def make_handler(app):
                 return self._json({"error": "settings can only be changed on the HUD's own PC"}, 403)
             try:
                 body = json.loads(self.rfile.read(length) or b"{}")
+                if path == "/api/custom-design":
+                    # Custom design: HUD Builder, built in (hudbuilder/embed.py).
+                    try:
+                        return self._send(json.dumps({"url": hud_builder.open_window(app.builder, "Custom design · CoD HUD")}))
+                    except ValueError as e:
+                        return self._send(json.dumps({"error": str(e)}), status=400)
                 if path.startswith("/api/engine/"):
                     # Connect to GFX Engine (see enginelink.py).
                     reply = app.engine.handle("POST", path, body)
@@ -691,6 +718,9 @@ def start(app):
     threading.Thread(target=fonts.installed, daemon=True).start()   # (the font list, ready for the panel)
     clean_up_old_update()
     app.updater.check_in_background()
+    # Custom design: design your own HUD (or bring in a .psd / .fig / .sccgfx) on this HUD's data.
+    app.builder = hud_builder.start("cod", "CoD HUD", app._builder_snapshot, DATA_DIR,
+                                    host_url=lambda: f"http://127.0.0.1:{port}")
     log(f"CoD HUD {app.updater.current} running - control panel http://localhost:{port}/control")
     log(f"Overlay (browser source, 1920x1080): http://localhost:{port}/overlay")
     return app.server

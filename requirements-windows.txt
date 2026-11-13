@@ -10,3 +10,7 @@ winrt-Windows.Globalization
 winrt-Windows.Graphics.Imaging
 winrt-Windows.Media.Ocr
 winrt-Windows.Storage.Streams
+# Custom design (HUD Builder): Photoshop files
+psd-tools
+# Custom design (HUD Builder): Figma files
+zstandard

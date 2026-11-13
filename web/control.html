@@ -149,6 +149,7 @@
   </div>
   <div class="seg" id="mode"><button data-demo="0">Live game</button><button data-demo="1">Demo</button></div>
   <span class="version" id="version"></span>
+  <button id="custom-design" title="Design your own HUD on this HUD's live data, or bring in a Photoshop, Figma or GFX Engine design (HUD Builder, built in)">Custom design</button>
   <button id="update" class="update" hidden></button>
 </header>
 
@@ -735,6 +736,14 @@
     document.addEventListener("click", function () { setTimeout(refreshLinks, 50); });
   });
 })();
+</script>
+<script>
+// Custom design: HUD Builder, built in, in its own window.
+document.getElementById("custom-design").addEventListener("click", async () => {
+  const r = await fetch("/api/custom-design", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const d = await r.json().catch(() => ({}));
+  if (d.error) alert(d.error);
+});
 </script>
 </body>
 </html>
